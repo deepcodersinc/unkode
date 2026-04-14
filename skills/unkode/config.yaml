@@ -1,0 +1,16 @@
+# Unkode configuration for this repository.
+# Edit these values to customize how unkode works for your project.
+
+# The branch to compare against when running diffs (usually main, master, or develop).
+# Claude will also use this to determine which branch to treat as the baseline.
+base_branch: main
+
+# Directories to ignore when analyzing the codebase.
+# Useful for monorepos with generated code, vendored dependencies, or documentation.
+# Examples: ["vendor", "generated", "docs", "node_modules"]
+exclude_paths: []
+
+# Direction the architecture diagram flows.
+#   LR = left to right (good for wide diagrams, typical system layouts)
+#   TB = top to bottom (good for hierarchical / layered architectures)
+diagram_direction: LR

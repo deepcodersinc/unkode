@@ -1,0 +1,9 @@
+{
+  "plugins": [
+    {
+      "name": "unkode",
+      "description": "Catch architectural drift on every PR. AI writes code fast — unkode makes sure the architecture doesn't collapse while it does.",
+      "path": "skills"
+    }
+  ]
+}

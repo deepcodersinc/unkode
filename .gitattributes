@@ -1,0 +1,17 @@
+# Default to LF line endings for text files
+* text=auto eol=lf
+
+# Explicitly set LF for these
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.svg binary

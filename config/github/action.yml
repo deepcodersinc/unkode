@@ -1,0 +1,117 @@
+name: 'Unkode Architecture Check'
+description: 'Post architecture diff diagram on PRs when unkode.yaml changes'
+
+inputs:
+  base-branch:
+    description: 'Branch to compare against'
+    required: false
+    default: 'main'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install pyyaml -q
+
+    - name: Generate diff
+      id: diff
+      shell: bash
+      run: |
+        # Find yaml_diff.py
+        DIFF_SCRIPT=""
+        for d in .agents/skills/unkode .claude/skills/unkode; do
+          if [ -f "$d/yaml_diff.py" ]; then
+            DIFF_SCRIPT="$d/yaml_diff.py"
+            break
+          fi
+        done
+
+        if [ -z "$DIFF_SCRIPT" ]; then
+          echo "has_diff=false" >> $GITHUB_OUTPUT
+          echo "no_script=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Check if unkode.yaml exists on base branch
+        BASE=${{ inputs.base-branch }}
+        if ! git show origin/${BASE}:unkode.yaml > /dev/null 2>&1; then
+          echo "has_diff=false" >> $GITHUB_OUTPUT
+          echo "no_baseline=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Check if unkode.yaml exists on current branch
+        if [ ! -f unkode.yaml ]; then
+          echo "has_diff=false" >> $GITHUB_OUTPUT
+          echo "no_yaml=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Run diff
+        python "$DIFF_SCRIPT" \
+          --base-branch "origin/${BASE}" \
+          --current unkode.yaml \
+          -o /tmp/unkode-diff.md 2>/dev/null
+
+        if [ -f /tmp/unkode-diff.md ]; then
+          echo "has_diff=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_diff=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Post PR comment
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          let body = '';
+          const hasDiff = '${{ steps.diff.outputs.has_diff }}' === 'true';
+          const noYaml = '${{ steps.diff.outputs.no_yaml }}' === 'true';
+          const noBaseline = '${{ steps.diff.outputs.no_baseline }}' === 'true';
+
+          if (noYaml) {
+            body = '> **Unkode:** No `unkode.yaml` found. Run `/unkode` to generate the architecture baseline.';
+          } else if (noBaseline) {
+            body = '> **Unkode:** No architecture baseline on main yet. Merge `unkode.yaml` to main first.';
+          } else if (hasDiff) {
+            try {
+              const diff = fs.readFileSync('/tmp/unkode-diff.md', 'utf8');
+              if (!diff.includes('No architectural changes detected')) {
+                body = diff;
+              }
+            } catch (e) {}
+          }
+
+          if (!body.trim()) return;
+
+          // Find existing unkode comment to update
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c => c.body && c.body.includes('**Unkode'));
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
