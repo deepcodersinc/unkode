@@ -28,10 +28,13 @@ Run: `python <skill-dir>/preflight.py`
 
 Use this when no `unkode.yaml` exists (first-time setup).
 
+> **Source of truth is the code, not the docs.** Documentation files (README, ARCHITECTURE.md, CONTRIBUTING.md, diagrams in markdown) are often stale, aspirational, or incomplete. Use them only as starting hints. Always verify every module, component, and dependency by reading the actual file tree and import statements. If docs describe a module that doesn't exist in the code, skip it. If docs miss a module that clearly exists in the code, include it.
+
 ### Step 1: Understand the project
-- Read the top-level directory structure
+- Read the top-level directory structure (actual folders, not just what the README says)
 - Identify the project type: monorepo, single app, infrastructure-only, or mixed
 - Look for key indicators: package.json, go.mod, Cargo.toml, requirements.txt, terraform/, docker-compose.yml, k8s/, Dockerfile, etc.
+- Docs can help you understand *intent*, but the file tree tells you what actually exists
 
 ### Step 2: Identify modules
 - Modules are the major logical pieces of the system (aim for 5-15)
@@ -72,7 +75,8 @@ Use this when no `unkode.yaml` exists (first-time setup).
 
 ### Step 6: Trace dependencies
 - `depends_on` means "this module/component needs the other to function"
-- Trace from actual imports, API calls, database connections — not guesses
+- Trace from actual imports, API calls, database connections in the code — **never from what docs claim**
+- If a README says Module A depends on Module B but there are no imports between them, do not include that dependency
 - External services are dependencies too
 - Avoid circular dependencies at the module level
 

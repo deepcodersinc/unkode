@@ -4,7 +4,7 @@
 
 AI agents now write code faster than humans can review it. That speed comes at a cost — architecture drifts. New dependencies appear, boundaries break, and nobody notices until the system is unrecognizable.
 
-**unkode** makes architectural changes visible on every pull request. A color-coded diff shows exactly which modules were added, removed, or rewired. The architecture map stays in sync with the code — automatically, in the repo, versioned like everything else.
+**Unkode** makes architectural changes visible on every pull request. A color-coded diff shows exactly which modules were added, removed, or rewired. The architecture map stays in sync with the code — automatically, in the repo, versioned like everything else.
 
 Visit **[unkode.dev](https://unkode.dev)** for updates.  
 If you find this useful, a GitHub star ⭐ would be much appreciated.
@@ -32,7 +32,7 @@ One-time setup per repository.
 
 ### 1. Copy the skill to your repo
 
-unkode ships as a Claude Code skill (also compatible with other agents that read `.agents/skills/`).
+Unkode ships as a Claude Code skill (also compatible with other agents that read `.agents/skills/`).
 
 ```bash
 # For Claude Code
@@ -133,7 +133,7 @@ Incremental syncs are cheap — they only read the files that changed, not the w
 
 ---
 
-## Why unkode
+## Why Unkode
 
 - **AI writes code 10x faster. Architecture drifts 10x faster too.** unkode flags drift on every PR so nothing slips through.
 - **PRs hide architectural impact.** Code diffs don't show "this PR added a direct database dependency from the frontend." unkode does.
@@ -142,9 +142,19 @@ Incremental syncs are cheap — they only read the files that changed, not the w
 
 ---
 
+## What's next
+
+Unkode works today, but I'm actively building a more rigorous pipeline with stronger accuracy guarantees and zero hallucination — plus new features like supporting more diagram formats, multi-repo dashboards, architecture history timelines and integration.
+
+If you'd like to hear about major updates as they ship, drop your email on the [waitlist](https://tally.so/r/lb7odB).
+
+No marketing, no spam — just a single notification when a new iteration is ready.
+
+---
+
 ## Feedback
 
-unkode is early. What's working, what isn't, what would make it valuable for your team — please share.
+Unkode is early. What's working, what isn't, what would make it valuable for your team — please share.
 
 - **Bugs and feature requests:** [GitHub Issues](https://github.com/deepcodersinc/unkode/issues)
 - **Discussion, ideas, questions:** [GitHub Discussions](https://github.com/deepcodersinc/unkode/discussions)
