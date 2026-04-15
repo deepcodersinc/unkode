@@ -1,12 +1,13 @@
 # unkode
 
-> Catch architectural drift on every PR. See what changed, not just how.
+> Catch architectural drift on every PR or local changes.
 
 AI agents now write code faster than humans can review it. That speed comes at a cost — architecture drifts. New dependencies appear, boundaries break, and nobody notices until the system is unrecognizable.
 
 **unkode** makes architectural changes visible on every pull request. A color-coded diff shows exactly which modules were added, removed, or rewired. The architecture map stays in sync with the code — automatically, in the repo, versioned like everything else.
 
-Visit **[unkode.dev](https://unkode.dev)** for docs and updates. 
+Visit **[unkode.dev](https://unkode.dev)** for updates.  
+If you find this useful, a GitHub star ⭐ would be much appreciated.
 
 ---
 
