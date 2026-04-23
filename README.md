@@ -13,16 +13,35 @@ If you find this useful, a GitHub star ⭐ would be much appreciated.
 
 ## What it looks like
 
-On every PR, unkode posts a diff diagram showing exactly what changed in the architecture:
+On every PR, unkode posts a clean text summary of what changed plus a link to the live interactive dashboard:
 
-![Example architecture diff](img/example.png)
+```
+# Architecture Diff
 
-Green modules are new, red are removed, amber are modified. Everything else stays neutral so changes jump out immediately.
+**Added:**
+  + Notifications
+  + SMS
 
-Two files live in your repo:
+**Modified:**
+  ~ tRPC API
+    + depends on Authentication
 
-- `unkode.yaml` — the architecture as structured data (source of truth)
-- `arch_map.md` — the rendered Mermaid diagram of the current state (auto-generated)
+**Total:** 2 added, 0 removed, 1 modified
+
+---
+
+[Open interactive view](https://unkode.dev/dashboard/?repo=owner/name&pr=123) — explore the changes in unkode.dev
+```
+
+Click the link → opens an interactive diagram at **[unkode.dev/dashboard](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso)** with color-coded nodes (green = added, red = removed, amber = modified). Click any module to see exactly what changed — its dependencies, components, role.
+
+**Try it now:** [unkode.dev/dashboard/?repo=deepcodersinc/documenso](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso)
+
+Three artifacts in your repo:
+
+- **`unkode.yaml`** — the architecture as structured data (source of truth)
+- **`arch_map.md`** — Mermaid diagram of the current state (auto-generated, renders inline on GitHub — useful when the repo is private)
+- **The dashboard** at unkode.dev needs nothing in your repo beyond `unkode.yaml` — it pulls live from your default branch
 
 ---
 
@@ -94,7 +113,7 @@ Once setup is done, this is what your day-to-day looks like:
 
 1. **Make code changes** on a branch as you normally would.
 2. **Run `/unkode`** before pushing. It updates `unkode.yaml` incrementally and regenerates `arch_map.md`.
-3. **Commit and open a PR.** The GitHub Action posts a color-coded diff diagram as a PR comment showing what changed architecturally.
+3. **Commit and open a PR.** The GitHub Action posts a text summary of architectural changes plus a deep link to the interactive dashboard at [unkode.dev/dashboard](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso). Reviewers click through to explore the diff visually.
 4. **Merge.** The updated `unkode.yaml` on main becomes the new baseline for future PRs.
 
 ---
@@ -124,12 +143,13 @@ unkode is frugal. Running it doesn't burn through your subscription.
 |-----------|------|----------------|------|
 | `/unkode` (first time) | Once per repo, on `main` | ~4,000 tokens | ~3 min |
 | `/unkode` (dev workflow) | Per branch, before PR | 500–1,000 tokens | ~1 min |
-| Mermaid diagram generation | Every run | 0 tokens | instant |
+| Mermaid diagram (`arch_map.md`) | Every run | 0 tokens | instant |
 | PR diff on GitHub Action | Every PR | 0 tokens | seconds |
+| Dashboard rendering at unkode.dev | Anytime, anyone | 0 tokens | instant |
 
 The first run depends less on codebase size and more on **how well-documented the project is**. A 1.5M LOC monorepo with clear package boundaries and READMEs costs roughly the same as a smaller but less organized repo. For best results, add README files and module-level docs before running unkode for the first time — the agent picks up context quickly and produces a sharper architecture map.
 
-Incremental syncs are cheap — they only read the files that changed, not the whole codebase. The Mermaid generation and PR diff are deterministic and rule-based — no agent involvement, no tokens used.
+Incremental syncs are cheap — they only read the files that changed, not the whole codebase. Everything downstream of the YAML — Mermaid generation, PR diffs, the dashboard — is deterministic and rule-based, no agent involvement, no tokens used.
 
 ---
 
