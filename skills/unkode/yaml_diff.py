@@ -335,16 +335,10 @@ def main():
     summary = render_summary(diff)
 
     if args.output:
-        # File output: include Mermaid diagram for PR comments
-        if not has_changes:
-            output = f"# Architecture Diff\n\n{summary}\n"
-        else:
-            mermaid = render_diff_mermaid(diff, curr_arch)
-            output = f"# Architecture Diff\n\n{summary}\n\n```mermaid\n{mermaid}\n```\n"
+        output = f"# Architecture Diff\n\n{summary}\n"
         Path(args.output).write_text(output, encoding="utf-8")
         print(f"Written: {args.output}")
     else:
-        # Console output: summary only
         print(summary)
 
 
