@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>unkode — Architecture viewer</title>
+  <meta name="description" content="View architecture diagram for any GitHub repository using unkode." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="view.css" />
+</head>
+<body>
+  <div class="viewPage">
+    <div class="glow"></div>
+
+    <!-- Nav -->
+    <div class="navWrap">
+      <nav class="nav">
+        <a class="navBrand" href="/" aria-label="unkode home">
+          <svg width="36" height="36" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="m 17.22,4.69 -6,6 6,6" stroke="#b3b3b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <rect class="logoCursor" fill="#00ad00" width="4.08" height="1.5" x="4.5" y="17.12" />
+          </svg>
+          <span class="navName">
+            <span class="un">UN</span><span class="kode">KODE</span><span class="dotDev">.dev</span>
+          </span>
+        </a>
+        <div class="navLinks">
+          <a class="navLink" href="https://github.com/deepcodersinc/unkode" target="_blank" rel="noopener">GitHub</a>
+          <a class="navLink" href="https://github.com/deepcodersinc/unkode#quick-setup" target="_blank" rel="noopener">Install</a>
+          <a class="navLink navLinkAccent" href="https://tally.so/r/lb7odB" target="_blank" rel="noopener">Join Waitlist</a>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Repo header -->
+    <div class="repoHeader" id="repoHeader" hidden>
+      <div class="repoHeaderRow">
+        <div class="repoMeta">
+          <div class="repoLabel">Architecture</div>
+          <div class="repoName" id="repoName"></div>
+        </div>
+        <div class="repoActions">
+          <a id="repoLink" class="navLink" href="#" target="_blank" rel="noopener">View on GitHub &rarr;</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content area -->
+    <div class="viewContent">
+      <!-- Loading -->
+      <div class="viewState" id="stateLoading">
+        <div class="spinner"></div>
+        <div class="stateText">Loading architecture diagram&hellip;</div>
+      </div>
+
+      <!-- Diagram -->
+      <div class="diagramWrap" id="diagramWrap" hidden>
+        <div class="mermaid" id="diagram"></div>
+      </div>
+
+      <!-- Not set up -->
+      <div class="viewState" id="stateEmpty" hidden>
+        <div class="stateIcon">&diam;</div>
+        <div class="stateTitle">This repo doesn't have unkode set up yet</div>
+        <div class="stateDesc">
+          unkode reads <code>arch_map.md</code> from the repo's main branch.
+          Once the repo has it committed, the diagram will render here automatically.
+        </div>
+        <div class="stateActions">
+          <a class="ctaPrimary" href="https://github.com/deepcodersinc/unkode#quick-setup" target="_blank" rel="noopener">
+            Get started in 3 steps &rarr;
+          </a>
+          <a class="ctaSecondary" href="/">Try another repo</a>
+        </div>
+      </div>
+
+      <!-- Bad URL -->
+      <div class="viewState" id="stateInvalid" hidden>
+        <div class="stateIcon">&diam;</div>
+        <div class="stateTitle">No repository specified</div>
+        <div class="stateDesc">Add <code>?repo=owner/name</code> to the URL, or go back to the home page to enter one.</div>
+        <div class="stateActions">
+          <a class="ctaSecondary" href="/">&larr; Back home</a>
+        </div>
+      </div>
+
+      <!-- Network error -->
+      <div class="viewState" id="stateError" hidden>
+        <div class="stateIcon">&diam;</div>
+        <div class="stateTitle">Couldn't load this repo</div>
+        <div class="stateDesc" id="errorDesc">Something went wrong while fetching the architecture file.</div>
+        <div class="stateActions">
+          <button class="ctaSecondary" type="button" onclick="location.reload()">Retry</button>
+          <a class="ctaSecondary" href="/">&larr; Back home</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footerBrand">
+        <svg width="20" height="20" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="m 17.22,4.69 -6,6 6,6" stroke="#b3b3b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <rect class="logoCursor" fill="#00ad00" width="4.08" height="1.5" x="4.5" y="17.12" />
+        </svg>
+        <span class="footerName">
+          <span class="un">UN</span><span class="kode">KODE</span><span class="dotDev">.dev</span>
+        </span>
+      </div>
+      <div class="footerDim">Apache 2.0 licensed &middot; Open source architecture drift detection</div>
+      <div class="footerLinks">
+        <a class="footerLink" href="https://github.com/deepcodersinc/unkode" target="_blank" rel="noopener">GitHub</a>
+        <a class="footerLink" href="https://github.com/deepcodersinc/unkode/discussions" target="_blank" rel="noopener">Discussions</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const repoParam = (params.get('repo') || '').trim();
+      const branch = (params.get('branch') || 'main').trim();
+
+      const stateLoading = document.getElementById('stateLoading');
+      const stateEmpty = document.getElementById('stateEmpty');
+      const stateInvalid = document.getElementById('stateInvalid');
+      const stateError = document.getElementById('stateError');
+      const diagramWrap = document.getElementById('diagramWrap');
+      const diagramEl = document.getElementById('diagram');
+      const repoHeader = document.getElementById('repoHeader');
+      const repoNameEl = document.getElementById('repoName');
+      const repoLinkEl = document.getElementById('repoLink');
+      const errorDesc = document.getElementById('errorDesc');
+
+      function show(el) {
+        [stateLoading, stateEmpty, stateInvalid, stateError, diagramWrap].forEach(function (n) {
+          n.hidden = n !== el;
+        });
+      }
+
+      function parseRepo(input) {
+        const s = (input || '').trim();
+        if (!s) return null;
+        const cleaned = s
+          .replace(/^https?:\/\//, '')
+          .replace(/^(www\.)?github\.com\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, '');
+        const match = cleaned.match(/^([\w.-]+)\/([\w.-]+)/);
+        return match ? match[1] + '/' + match[2] : null;
+      }
+
+      function extractMermaid(md) {
+        const match = md.match(/```mermaid\s*\n([\s\S]*?)```/);
+        return match ? match[1].trim() : null;
+      }
+
+      async function render(repo) {
+        const rawBase = 'https://raw.githubusercontent.com/' + repo + '/' + branch;
+        const archUrl = rawBase + '/arch_map.md';
+
+        try {
+          const res = await fetch(archUrl, { cache: 'no-cache' });
+          if (res.status === 404) {
+            show(stateEmpty);
+            return;
+          }
+          if (!res.ok) {
+            errorDesc.textContent = 'HTTP ' + res.status + ' while fetching arch_map.md.';
+            show(stateError);
+            return;
+          }
+          const md = await res.text();
+          const code = extractMermaid(md);
+          if (!code) {
+            errorDesc.textContent = 'arch_map.md was found but contains no Mermaid diagram block.';
+            show(stateError);
+            return;
+          }
+
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: 'neutral',
+            securityLevel: 'loose',
+            flowchart: { htmlLabels: true, curve: 'basis' }
+          });
+
+          const result = await mermaid.render('unkodeDiagram', code);
+          diagramEl.innerHTML = result.svg;
+          show(diagramWrap);
+        } catch (err) {
+          errorDesc.textContent = err && err.message ? err.message : 'Network error.';
+          show(stateError);
+        }
+      }
+
+      if (!repoParam) {
+        show(stateInvalid);
+        return;
+      }
+
+      const repo = parseRepo(repoParam);
+      if (!repo) {
+        show(stateInvalid);
+        return;
+      }
+
+      repoNameEl.textContent = repo + (branch !== 'main' ? ' @ ' + branch : '');
+      repoLinkEl.href = 'https://github.com/' + repo;
+      repoHeader.hidden = false;
+      document.title = repo + ' — unkode';
+
+      render(repo);
+    })();
+  </script>
+</body>
+</html>

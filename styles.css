@@ -61,7 +61,14 @@ code {
   justify-content: space-between;
   padding: 20px 32px;
 }
-.navBrand { display: flex; align-items: center; gap: 10px; }
+.navBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+}
+.navBrand:hover { text-decoration: none; }
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
@@ -170,6 +177,83 @@ code {
   transition: border-color 0.15s;
 }
 .ctaSecondary:hover { border-color: var(--brand); }
+
+/* "Or" divider */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 460px;
+  margin: 36px auto 18px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* View your own */
+.viewYourOwn {
+  max-width: 460px;
+  margin: 0 auto;
+}
+.viewYourOwnLabel {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+/* Repo input */
+.repoInput {
+  display: flex;
+  gap: 6px;
+}
+.repoInput input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.repoInput input::placeholder { color: var(--text-dim); opacity: 0.7; }
+.repoInput input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(0, 173, 0, 0.12);
+}
+.repoInput input.invalid {
+  border-color: #c62828;
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.15);
+}
+.repoInput button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0 16px;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.repoInput button:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.repoInput .arrow { margin-left: 3px; }
 
 /* Features */
 .features {
@@ -301,4 +385,7 @@ code {
   .heroTitle { font-size: 2rem; }
   .features, .stepGrid { grid-template-columns: 1fr; }
   .footer { flex-direction: column; gap: 12px; text-align: center; }
+  .repoInput { flex-direction: column; }
+  .repoInput button { padding: 10px; }
+  .divider, .viewYourOwn { max-width: 100%; }
 }

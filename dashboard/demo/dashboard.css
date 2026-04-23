@@ -1,0 +1,475 @@
+/* Dashboard page — reuses tokens from /styles.css */
+
+/* Disable the blinking cursor on nav + footer logos on this page */
+.logoCursor { animation: none !important; }
+
+/* Smaller nav logo on dashboard pages */
+.navBrand svg { width: 26px; height: 26px; }
+.navName { font-size: 1rem; }
+.navName .dotDev { font-size: 0.7em; }
+
+.dashPage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Dashboard header */
+.dashHeader {
+  width: 100%;
+  max-width: 1400px;
+  padding: 24px 32px 12px;
+  margin: 0 auto;
+  z-index: 1;
+}
+.dashHeaderRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dashLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.dashName {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text);
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+}
+.dashActions { display: flex; gap: 8px; }
+.dashHint {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Tabs */
+.dashTabs {
+  margin-top: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.tabsBar {
+  display: flex;
+  gap: 4px;
+}
+.tabBtn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 18px;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tabBtn:hover { color: var(--text); }
+.tabBtnActive {
+  color: var(--text);
+  border-bottom-color: var(--brand);
+}
+
+/* Layout: diagram + sidebar */
+.dashLayout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px 32px 32px;
+  flex: 1;
+  z-index: 1;
+  min-height: 620px;
+}
+
+.dashDiagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  min-height: 620px;
+}
+.flowMount {
+  width: 100%;
+  height: 100%;
+  min-height: 620px;
+}
+
+.dashSidebar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 620px;
+  max-height: calc(100vh - 160px);
+}
+
+/* Loading / error / not-found states inside the diagram area */
+.dashState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 32px;
+  height: 100%;
+  min-height: 620px;
+  text-align: center;
+}
+.stateIcon {
+  font-size: 2rem;
+  color: var(--brand);
+  margin-bottom: 18px;
+}
+.stateTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.stateDesc {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 420px;
+  margin: 0 auto 24px;
+}
+.stateText {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  margin-top: 12px;
+}
+.stateActions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Arch node --- */
+.archNode {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 220px;
+  min-height: 72px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 2px solid #5b6b82;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  cursor: pointer;
+}
+.archNodeInternal:hover {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(0, 173, 0, 0.18);
+}
+.archNodeExternal {
+  background: #2a3340;
+  border: 2px solid #64748b;
+  color: #e2e8f0;
+}
+.archNodeExternal:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.2);
+}
+.archNodeSelected.archNodeInternal {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px rgba(0, 173, 0, 0.3) !important;
+}
+.archNodeSelected.archNodeExternal {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.25) !important;
+}
+.archNodeIcon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+}
+.archNodeInternal .archNodeIcon { color: var(--brand); }
+.archNodeExternal .archNodeIcon { color: #cbd5e1; }
+.archNodeExternal .archNodeTech { color: #cbd5e1; opacity: 0.75; }
+
+/* Diff node states */
+.archNode_added {
+  border-color: #00ad00 !important;
+  background: rgba(0, 173, 0, 0.08) !important;
+  box-shadow: 0 0 0 3px rgba(0, 173, 0, 0.15);
+}
+.archNode_removed {
+  border-color: #dc2626 !important;
+  border-style: dashed !important;
+  background: rgba(220, 38, 38, 0.06) !important;
+  opacity: 0.85;
+}
+.archNode_modified {
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.06) !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+/* Diff node tag */
+.archNodeTag {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  line-height: 1;
+  z-index: 2;
+}
+.archNodeTag_added    { background: #064e3b; color: #6ee7b7; border: 1px solid #00ad00; }
+.archNodeTag_removed  { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
+.archNodeTag_modified { background: #451a03; color: #fcd34d; border: 1px solid #f59e0b; }
+
+.archNode { position: relative; }
+.archNodeBody { min-width: 0; flex: 1; }
+.archNodeName {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archNodeTech {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Sidebar --- */
+.sidebarEmpty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-dim);
+}
+.sidebarEmptyIcon {
+  font-size: 1.6rem;
+  color: var(--brand);
+  margin-bottom: 14px;
+}
+.sidebarEmptyTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.sidebarEmptyDesc {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.sidebarContent {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sidebarKind {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+.sidebarName {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+}
+.sidebarRole {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+.sidebarSection {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.sidebarSectionTitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.sidebarTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sidebarTag {
+  background: rgba(0, 173, 0, 0.08);
+  color: var(--brand);
+  border: 1px solid rgba(0, 173, 0, 0.2);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+}
+.sidebarList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sidebarList li {
+  font-size: 0.85rem;
+  color: var(--text);
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.sidebarComponents li { padding: 10px; }
+.sidebarComponentName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.sidebarComponentDesc {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Changes sidebar */
+.sidebarKind_added    { color: #6ee7b7; }
+.sidebarKind_removed  { color: #fca5a5; }
+.sidebarKind_modified { color: #fcd34d; }
+
+.changeNote {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 10px 12px;
+  border-left: 2px solid var(--border);
+  margin-top: 4px;
+}
+
+.changeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.changeItem {
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+  line-height: 1.5;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+}
+.changeItem_dep_add, .changeItem_comp_add {
+  border-color: rgba(0, 173, 0, 0.35);
+  background: rgba(0, 173, 0, 0.06);
+  color: #6ee7b7;
+}
+.changeItem_dep_remove, .changeItem_comp_remove {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.06);
+  color: #fca5a5;
+}
+.changeItem_tech, .changeItem_role, .changeItem_path {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.06);
+  color: #fcd34d;
+}
+
+/* Changes overview legend */
+.changeLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.changeLegendRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+.changeDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.changeDot_added    { background: #00ad00; }
+.changeDot_removed  { background: #dc2626; }
+.changeDot_modified { background: #f59e0b; }
+
+/* Override ReactFlow defaults to match our dark theme */
+.react-flow__controls {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+.react-flow__controls-button {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-dim) !important;
+  fill: var(--text-dim) !important;
+}
+.react-flow__controls-button:hover {
+  background: rgba(0, 173, 0, 0.1) !important;
+  color: var(--brand) !important;
+  fill: var(--brand) !important;
+}
+
+/* Mobile */
+@media (max-width: 1000px) {
+  .dashLayout {
+    grid-template-columns: 1fr;
+    padding: 12px 16px 32px;
+  }
+  .dashHeader { padding: 16px 16px 8px; }
+  .dashSidebar { max-height: 400px; min-height: 240px; }
+  .dashDiagram { min-height: 480px; }
+}

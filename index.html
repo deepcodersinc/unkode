@@ -42,15 +42,60 @@
         AI writes code 10x faster. Architecture drifts 10x faster too.
         unkode makes every architectural change visible on every pull request — as a color-coded diff diagram, right where your team already reviews.
       </p>
+
       <div class="heroActions">
-        <a class="ctaPrimary" href="https://github.com/deepcodersinc/unkode" target="_blank" rel="noopener">
-          View on GitHub →
+        <a class="ctaPrimary" href="/dashboard/demo/">
+          See live demo &rarr;
         </a>
         <a class="ctaSecondary" href="https://github.com/deepcodersinc/unkode#quick-setup" target="_blank" rel="noopener">
           Install in 3 steps
         </a>
       </div>
+
+      <div class="divider"><span>or</span></div>
+
+      <div class="viewYourOwn">
+        <div class="viewYourOwnLabel">Already using unkode? View your repo:</div>
+        <form class="repoInput" onsubmit="goView(event)">
+          <input
+            type="text"
+            id="repoField"
+            placeholder="https://github.com/owner/repo"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="GitHub repository URL"
+          />
+          <button type="submit">View <span class="arrow">&rarr;</span></button>
+        </form>
+      </div>
     </div>
+
+    <script>
+      function parseRepo(input) {
+        const s = (input || '').trim();
+        if (!s) return null;
+        const cleaned = s
+          .replace(/^https?:\/\//, '')
+          .replace(/^(www\.)?github\.com\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, '');
+        const match = cleaned.match(/^([\w.-]+)\/([\w.-]+)/);
+        return match ? match[1] + '/' + match[2] : null;
+      }
+
+      function goView(e) {
+        e.preventDefault();
+        const input = document.getElementById('repoField');
+        const repo = parseRepo(input.value);
+        if (!repo) {
+          input.classList.add('invalid');
+          input.focus();
+          setTimeout(function () { input.classList.remove('invalid'); }, 1200);
+          return;
+        }
+        window.location.href = '/view/?repo=' + encodeURIComponent(repo);
+      }
+    </script>
 
     <!-- Features -->
     <div class="features">

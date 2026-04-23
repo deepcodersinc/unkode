@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live demo — unkode architecture</title>
+  <meta name="description" content="Interactive architecture diagram powered by unkode. See how a real open source project looks under the hood." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11/dist/style.css" />
+  <link rel="stylesheet" href="dashboard.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "react":             "https://esm.sh/react@18",
+      "react-dom/client":  "https://esm.sh/react-dom@18/client",
+      "reactflow":         "https://esm.sh/reactflow@11?deps=react@18,react-dom@18",
+      "htm":               "https://esm.sh/htm@3",
+      "js-yaml":           "https://esm.sh/js-yaml@4",
+      "@dagrejs/dagre":    "https://esm.sh/@dagrejs/dagre@1"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div class="dashPage">
+    <div class="glow"></div>
+
+    <!-- Nav -->
+    <div class="navWrap">
+      <nav class="nav">
+        <a class="navBrand" href="/" aria-label="unkode home">
+          <svg width="36" height="36" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="m 17.22,4.69 -6,6 6,6" stroke="#b3b3b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <rect class="logoCursor" fill="#00ad00" width="4.08" height="1.5" x="4.5" y="17.12" />
+          </svg>
+          <span class="navName">
+            <span class="un">UN</span><span class="kode">KODE</span><span class="dotDev">.dev</span>
+          </span>
+        </a>
+        <div class="navLinks">
+          <a class="navLink" href="https://github.com/deepcodersinc/unkode" target="_blank" rel="noopener">GitHub</a>
+          <a class="navLink" href="https://github.com/deepcodersinc/unkode#quick-setup" target="_blank" rel="noopener">Install</a>
+          <a class="navLink navLinkAccent" href="https://tally.so/r/lb7odB" target="_blank" rel="noopener">Join Waitlist</a>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Dashboard header -->
+    <div class="dashHeader">
+      <div class="dashHeaderRow">
+        <div class="dashMeta">
+          <div class="dashLabel">Live demo</div>
+          <div class="dashName">Open source project architecture</div>
+        </div>
+        <div class="dashHint" id="dashHint">Click a module to see details</div>
+      </div>
+      <div class="dashTabs" id="dashTabs">
+        <!-- Populated by React -->
+      </div>
+    </div>
+
+    <!-- Dashboard layout -->
+    <div class="dashLayout">
+      <div class="dashDiagram">
+        <div id="flow" class="flowMount"></div>
+      </div>
+      <aside class="dashSidebar" id="sidebar">
+        <!-- Populated by React -->
+      </aside>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footerBrand">
+        <svg width="20" height="20" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="m 17.22,4.69 -6,6 6,6" stroke="#b3b3b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <rect class="logoCursor" fill="#00ad00" width="4.08" height="1.5" x="4.5" y="17.12" />
+        </svg>
+        <span class="footerName">
+          <span class="un">UN</span><span class="kode">KODE</span><span class="dotDev">.dev</span>
+        </span>
+      </div>
+      <div class="footerDim">Apache 2.0 licensed &middot; Open source architecture drift detection</div>
+      <div class="footerLinks">
+        <a class="footerLink" href="https://github.com/deepcodersinc/unkode" target="_blank" rel="noopener">GitHub</a>
+        <a class="footerLink" href="https://github.com/deepcodersinc/unkode/discussions" target="_blank" rel="noopener">Discussions</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

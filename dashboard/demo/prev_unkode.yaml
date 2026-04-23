@@ -1,0 +1,227 @@
+_meta:
+  last_sync_commit: a1b2c3d4e5f6789abcdef0123456789abcdef012
+  last_sync: 2026-03-14T00:00:00Z
+  version: 1
+
+architecture:
+  - name: Web Application
+    path: apps/remix
+    kind: frontend
+    tech: [typescript, react-router, hono]
+    role: Main end-user web app combining the React Router UI and Hono server that mounts all API routes and serves the signing experience.
+    depends_on:
+      - REST API V1
+      - tRPC API
+      - Business Logic Core
+      - Authentication
+      - UI Components
+      - Email Templates
+      - Background Jobs
+    components:
+      - name: Hono Server
+        path: apps/remix/server
+        description: Node entrypoint that mounts REST v1, tRPC v2, internal tRPC, and jobs handlers under a single HTTP server.
+      - name: React Router UI
+        path: apps/remix/app/routes
+        description: File-based routes split into authenticated, unauthenticated, and recipient signing flows.
+
+  - name: Documentation Site
+    path: apps/docs
+    kind: frontend
+    tech: [typescript, nextjs, fumadocs]
+    role: Public documentation website for end users and integrators.
+    depends_on: []
+
+  - name: OpenPage API
+    path: apps/openpage-api
+    kind: backend
+    tech: [typescript, express]
+    role: Public analytics API exposing aggregated product metrics.
+    depends_on:
+      - Database
+      - PostHog
+
+  - name: Legacy Analytics Service
+    path: apps/legacy-analytics
+    kind: backend
+    tech: [typescript, express]
+    role: Deprecated analytics worker scheduled for removal in favour of OpenPage API.
+    depends_on:
+      - Database
+      - PostHog
+
+  - name: REST API V1
+    path: packages/api
+    kind: backend
+    tech: [typescript, ts-rest]
+    role: Deprecated contract-based REST API for documents, templates, recipients, and fields, mounted at /api/v1.
+    depends_on:
+      - Business Logic Core
+      - Database
+    components:
+      - name: Contract Definitions
+        path: packages/api/v1/contract
+        description: ts-rest route contracts describing request and response schemas.
+      - name: REST Handlers
+        path: packages/api/v1/implementation.ts
+        description: Request handlers that validate auth tokens and delegate to core business logic.
+
+  - name: tRPC API
+    path: packages/trpc
+    kind: backend
+    tech: [typescript, trpc, openapi]
+    role: Current tRPC-based API layer powering both the internal UI API and the public V2 OpenAPI surface.
+    depends_on:
+      - Business Logic Core
+      - Database
+    components:
+      - name: Document Router
+        path: packages/trpc/server/document-router
+        description: tRPC procedures for document CRUD, sending, and signing lifecycle.
+      - name: Template Router
+        path: packages/trpc/server/template-router
+        description: tRPC procedures for template management and bulk sending.
+      - name: Organisation Router
+        path: packages/trpc/server/organisation-router
+        description: tRPC procedures for organisations, teams, members, and billing integration.
+      - name: Recipient & Field Routers
+        path: packages/trpc/server/recipient-router
+        description: tRPC procedures for managing signers and their assigned fields on documents.
+
+  - name: Business Logic Core
+    path: packages/lib
+    kind: library
+    tech: [typescript]
+    role: Central library containing server-only business logic, client utilities, universal helpers, and background job definitions.
+    depends_on:
+      - Database
+      - PDF Signing
+      - Email Templates
+      - S3 Storage
+      - Inngest
+      - Redis
+      - Stripe
+      - Google OAuth
+    components:
+      - name: Server Business Logic
+        path: packages/lib/server-only
+        description: Server-only domain operations for documents, signing, teams, billing, and webhooks.
+      - name: Universal Helpers
+        path: packages/lib/universal
+        description: Shared utilities including storage upload abstraction used on both client and server.
+      - name: Background Jobs
+        path: packages/lib/jobs
+        description: Job provider implementations (Inngest, BullMQ, local) plus job handler definitions.
+      - name: Client Utilities
+        path: packages/lib/client-only
+        description: Browser-safe helpers consumed by the Remix UI.
+
+  - name: Database
+    path: packages/prisma
+    kind: library
+    tech: [typescript, prisma, kysely]
+    role: Prisma schema, migrations, and generated client with a Kysely extension for typed raw queries.
+    depends_on:
+      - PostgreSQL
+
+  - name: Authentication
+    path: packages/auth
+    kind: library
+    tech: [typescript, arctic, webauthn]
+    role: Authentication module handling OAuth providers, passkey/WebAuthn, sessions, and API token verification.
+    depends_on:
+      - Database
+      - Google OAuth
+
+  - name: PDF Signing
+    path: packages/signing
+    kind: library
+    tech: [typescript]
+    role: Cryptographic PDF signing abstraction supporting local P12 certificates and Google Cloud KMS.
+    depends_on:
+      - Google Cloud KMS
+
+  - name: Email Templates
+    path: packages/email
+    kind: library
+    tech: [typescript, react-email, nodemailer]
+    role: Transactional email templates and mailer abstraction supporting SMTP and Resend.
+    depends_on:
+      - SMTP Provider
+      - Resend
+
+  - name: UI Components
+    path: packages/ui
+    kind: library
+    tech: [typescript, react, tailwind, radix]
+    role: Shared React component library built on Shadcn, Radix, and Tailwind.
+
+  - name: Enterprise Edition
+    path: packages/ee
+    kind: library
+    tech: [typescript]
+    role: Enterprise-only features such as advanced auth, audit logs, and compliance extensions.
+    depends_on:
+      - Business Logic Core
+
+  - name: Static Assets
+    path: packages/assets
+    kind: library
+    tech: [typescript]
+    role: Shared static images, icons, and logos used across apps.
+
+  - name: E2E Tests
+    path: packages/app-tests
+    kind: library
+    tech: [typescript, playwright]
+    role: Playwright end-to-end tests covering signing, auth, and document flows.
+
+  - name: PostgreSQL
+    type: external
+    kind: database
+    role: Primary relational datastore for users, organisations, documents, recipients, fields, and audit logs.
+
+  - name: Redis
+    type: external
+    kind: cache
+    role: Optional Redis-backed queue and cache when the BullMQ jobs provider is selected.
+
+  - name: S3 Storage
+    type: external
+    kind: storage
+    role: S3-compatible object storage for uploaded and signed PDFs when the S3 upload transport is selected.
+
+  - name: Inngest
+    type: external
+    kind: queue
+    role: Managed background job platform used when the Inngest jobs provider is configured.
+
+  - name: Google Cloud KMS
+    type: external
+    kind: api
+    role: Google Cloud KMS/HSM for cryptographic PDF signing in production deployments.
+
+  - name: Stripe
+    type: external
+    kind: api
+    role: Payment processing and subscription billing for organisations and teams.
+
+  - name: SMTP Provider
+    type: external
+    kind: api
+    role: Generic outbound SMTP server used for transactional email when SMTP transport is selected.
+
+  - name: Resend
+    type: external
+    kind: api
+    role: Managed transactional email API used when the Resend transport is selected.
+
+  - name: Google OAuth
+    type: external
+    kind: api
+    role: Google identity provider used for OAuth sign-in.
+
+  - name: PostHog
+    type: external
+    kind: api
+    role: Product analytics service for capturing usage events from both web app and backend.
