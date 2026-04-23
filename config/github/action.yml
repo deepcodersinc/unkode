@@ -85,7 +85,11 @@ runs:
             try {
               const diff = fs.readFileSync('/tmp/unkode-diff.md', 'utf8');
               if (!diff.includes('No architectural changes detected')) {
-                body = diff;
+                const dashboardUrl =
+                  `https://unkode.dev/dashboard/?repo=${context.repo.owner}/${context.repo.repo}` +
+                  `&pr=${context.issue.number}`;
+                body = diff + `\n\n---\n\n[Open interactive view](${dashboardUrl}) — ` +
+                       `explore the changes in unkode.dev`;
               }
             } catch (e) {}
           }
