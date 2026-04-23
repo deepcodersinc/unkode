@@ -79,6 +79,11 @@
   color: var(--text);
   border-bottom-color: var(--brand);
 }
+.tabBtnDisabled {
+  color: rgba(148, 163, 184, 0.4);
+  cursor: not-allowed;
+}
+.tabBtnDisabled:hover { color: rgba(148, 163, 184, 0.4); }
 
 /* Layout: diagram + sidebar */
 .dashLayout {

@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Live demo — unkode architecture</title>
-  <meta name="description" content="Interactive architecture diagram powered by unkode. See how a real open source project looks under the hood." />
+  <title>unkode — Architecture dashboard</title>
+  <meta name="description" content="Interactive architecture dashboard for any GitHub repository, powered by unkode." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11/dist/style.css" />
-  <link rel="stylesheet" href="../dashboard.css" />
+  <link rel="stylesheet" href="dashboard.css" />
 
   <script type="importmap">
   {
@@ -51,10 +51,10 @@
     <div class="dashHeader">
       <div class="dashHeaderRow">
         <div class="dashMeta">
-          <div class="dashLabel">Live demo</div>
-          <div class="dashName">Open source project architecture</div>
+          <div class="dashLabel" id="dashLabel">Loading…</div>
+          <div class="dashName" id="dashName">&nbsp;</div>
         </div>
-        <div class="dashHint" id="dashHint">Click a module to see details</div>
+        <div class="dashHint" id="dashHint">&nbsp;</div>
       </div>
       <div class="dashTabs" id="dashTabs">
         <!-- Populated by React -->
