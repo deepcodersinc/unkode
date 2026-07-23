@@ -37,10 +37,11 @@ Click the link → opens an interactive diagram at **[unkode.dev/dashboard](http
 
 **Try it now:** [unkode.dev/dashboard/?repo=deepcodersinc/documenso](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso)
 
-Three artifacts in your repo:
+Artifacts in your repo:
 
 - **`unkode.yaml`** — the architecture as structured data (source of truth)
 - **`arch_map.md`** — Mermaid diagram of the current state (auto-generated, renders inline on GitHub — useful when the repo is private)
+- **`arch_map.html`** — a standalone, interactive React Flow diagram (auto-generated). Double-click to open in any browser — pan, zoom, drag nodes, click a module for its role, dependencies, and components. No server, no build step, no install; works fully offline after the first open.
 - **The dashboard** at unkode.dev needs nothing in your repo beyond `unkode.yaml` — it pulls live from your default branch
 
 ---
@@ -112,7 +113,16 @@ Once setup is done, this is what your day-to-day looks like:
 ```
 
 1. **Make code changes** on a branch as you normally would.
-2. **Run `/unkode`** before pushing. It updates `unkode.yaml` incrementally and regenerates `arch_map.md`.
+2. **Run `/unkode`** to regenerate the diagrams. Which one you get depends on the flag:
+
+   | Command | What it does |
+   |---------|--------------|
+   | `/unkode` | Generate **both** diagrams (`arch_map.md` + `arch_map.html`) |
+   | `/unkode -mermaid` | Generate **only** the Mermaid diagram |
+   | `/unkode -html` | Generate **only** the React Flow diagram |
+   | `/unkode -sync` | Re-analyze the code, update `unkode.yaml`, then regenerate — use this before opening a PR |
+
+   As long as `unkode.yaml` already exists, the plain commands just render from it — instant, zero tokens, no code analysis. A full analysis runs **only** the first time (when `unkode.yaml` is missing). Use `-sync` when you want the map brought back in step with recent code changes.
 3. **Commit and open a PR.** The GitHub Action posts a text summary of architectural changes plus a deep link to the interactive dashboard at [unkode.dev/dashboard](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso). Reviewers click through to explore the diff visually.
 4. **Merge.** The updated `unkode.yaml` on main becomes the new baseline for future PRs.
 
@@ -144,6 +154,7 @@ unkode is frugal. Running it doesn't burn through your subscription.
 | `/unkode` (first time) | Once per repo, on `main` | ~4,000 tokens | ~3 min |
 | `/unkode` (dev workflow) | Per branch, before PR | 500–1,000 tokens | ~1 min |
 | Mermaid diagram (`arch_map.md`) | Every run | 0 tokens | instant |
+| React Flow diagram (`arch_map.html`) | Every run | 0 tokens | instant |
 | PR diff on GitHub Action | Every PR | 0 tokens | seconds |
 | Dashboard rendering at unkode.dev | Anytime, anyone | 0 tokens | instant |
 

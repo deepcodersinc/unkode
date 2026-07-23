@@ -14,13 +14,33 @@ Read `<skill-dir>/config.yaml` at the start. It contains:
 
 Apply `exclude_paths` when scanning the codebase in Init and Sync. The converter and diff script read the other settings automatically.
 
-## Pre-check
+## Arguments
+
+Parse the command arguments to decide which diagram(s) to generate — call this set the **targets**:
+
+- `-mermaid` (alias `-md`) → target is the Mermaid diagram only (`arch_map.md`)
+- `-html` (alias `-reactflow`) → target is the React Flow diagram only (`arch_map.html`)
+- neither given → targets are **both** diagrams
+- `-sync` → additionally re-analyze code changes and update `unkode.yaml` before generating (see Flow below). Can be combined with a diagram flag.
+
+## Flow
+
+The source of truth is `unkode.yaml`. A full codebase analysis happens **only when `unkode.yaml` does not exist**. When it exists, generation is deterministic and uses no tokens.
 
 Run: `python <skill-dir>/preflight.py`
 
-- If output is `INIT` → tell the user: "No baseline architecture found. I'll analyze the codebase and generate the architecture diagram. After this, commit unkode.yaml and arch_map.md to main as your baseline. Continue?" Wait for confirmation. Then follow the **Init** process below. After init, stop — do not run diff (there's no baseline to compare against yet).
-- If output is `UP_TO_DATE` → skip sync, go directly to the **Diff** process below.
-- If output starts with `SYNC` (e.g. `SYNC 12`) → follow the **Sync** process below, then the **Diff** process.
+- **`unkode.yaml` missing** (preflight prints `INIT`) → tell the user: "No baseline architecture found. I'll analyze the codebase and generate it. After this, commit unkode.yaml plus the diagram(s) to main as your baseline. Continue?" Wait for confirmation, then run the **Init Process**. Init writes `unkode.yaml` and generates the targets. Stop — do not run diff (no baseline to compare against yet).
+- **`unkode.yaml` exists, no `-sync`** (preflight prints `UP_TO_DATE` or `SYNC …`) → skip analysis entirely. Go straight to the **Generate Step** for the targets, then stop. Do not sync, do not run diff.
+- **`unkode.yaml` exists, `-sync` passed** → run the **Sync Process** (updates `unkode.yaml` from code changes), then the **Generate Step** for the targets, then the **Diff Process**.
+
+## Generate Step
+
+Generate each target from `unkode.yaml`:
+
+- Mermaid target → `python <skill-dir>/yaml_to_mermaid.py unkode.yaml -o arch_map.md`
+- React Flow target → `python <skill-dir>/yaml_to_reactflow.py unkode.yaml -o arch_map.html`
+
+After generating, tell the user which file(s) were written. For the React Flow target, add: "Open arch_map.html in a browser for the interactive view."
 
 ---
 
@@ -85,11 +105,11 @@ Use this when no `unkode.yaml` exists (first-time setup).
 - Set `_meta.last_sync_commit` to current HEAD SHA: run `git rev-parse HEAD`
 - Set `_meta.last_sync` to current UTC timestamp
 
-### Step 8: Generate Mermaid diagram
-- Run: `python <skill-dir>/yaml_to_mermaid.py unkode.yaml -o arch_map.md`
+### Step 8: Generate diagrams
+- Run the **Generate Step** for the targets (see Flow above). With no diagram flag, that's both `arch_map.md` and `arch_map.html`.
 
 ### Step 9: Done
-- Tell the user: "Architecture baseline generated. Commit unkode.yaml and arch_map.md to main."
+- Tell the user: "Architecture baseline generated. Commit unkode.yaml and the generated diagram(s) to main." If the React Flow target was generated, add: "Open arch_map.html in a browser for the interactive view."
 - Stop here. Do not run diff after init.
 
 ---
@@ -107,7 +127,7 @@ Use this when `unkode.yaml` exists but is out of date.
 - Run: `git diff --name-status HEAD` for uncommitted changes
 - Run: `git diff --name-status --cached` for staged changes
 - Combine all three lists (deduplicate)
-- Exclude `unkode.yaml` and `arch_map.md` from the list
+- Exclude `unkode.yaml`, `arch_map.md`, and `arch_map.html` from the list
 - If `last_sync_commit` is not reachable, fall back to analyzing the full codebase
 
 ### Step 3: Determine impact
@@ -133,8 +153,8 @@ For each changed file, check:
 - Write to `unkode.yaml`, preserving the same format
 - Do NOT reorder modules — keep existing order to minimize diff noise
 
-### Step 7: Regenerate Mermaid diagram
-- Run: `python <skill-dir>/yaml_to_mermaid.py unkode.yaml -o arch_map.md`
+### Step 7: Regenerate diagrams
+- Run the **Generate Step** for the targets (see Flow above).
 
 ---
 

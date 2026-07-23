@@ -43,6 +43,7 @@ else:
     # Exclude unkode's own files
     all_changes.discard("unkode.yaml")
     all_changes.discard("arch_map.md")
+    all_changes.discard("arch_map.html")
 
     if not all_changes:
         print("UP_TO_DATE")
