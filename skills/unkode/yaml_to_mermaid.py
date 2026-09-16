@@ -315,7 +315,7 @@ def check_staleness(meta: dict) -> str:
 
     if head[:7] == str(last_sync)[:7]:
         return ""
-    return f"> :warning: **Architecture may be outdated** (last synced at `{str(last_sync)[:7]}`, current HEAD is `{head[:7]}`). Run `/unkode` to update.\n\n"
+    return f"> :warning: **Architecture may be outdated** (last built at `{str(last_sync)[:7]}`, current HEAD is `{head[:7]}`). Run `/unkode init --force` to rebuild it.\n\n"
 
 
 def main():

@@ -78,7 +78,7 @@ runs:
           const noBaseline = '${{ steps.diff.outputs.no_baseline }}' === 'true';
 
           if (noYaml) {
-            body = '> **Unkode:** No `unkode.yaml` found. Run `/unkode` to generate the architecture baseline.';
+            body = '> **Unkode:** No `unkode.yaml` found. Run `/unkode init` to generate the architecture baseline.';
           } else if (noBaseline) {
             body = '> **Unkode:** No architecture baseline on main yet. Merge `unkode.yaml` to main first.';
           } else if (hasDiff) {

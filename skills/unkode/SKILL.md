@@ -1,6 +1,6 @@
 ---
 name: unkode
-description: Generate, sync, and diff architecture map (unkode.yaml + arch_map.md) from the codebase
+description: Generate and render an architecture map (unkode.yaml + arch_map.md + arch_map.html) from the codebase
 ---
 
 # Unkode — Architecture Map
@@ -8,45 +8,63 @@ description: Generate, sync, and diff architecture map (unkode.yaml + arch_map.m
 ## Configuration
 
 Read `<skill-dir>/config.yaml` at the start. It contains:
-- `base_branch` — the branch to compare diffs against
 - `exclude_paths` — directories to ignore during analysis (skip these when identifying modules)
 - `diagram_direction` — diagram flow (LR or TB)
+- `base_branch` — used by the PR check, not by these commands
 
-Apply `exclude_paths` when scanning the codebase in Init and Sync. The converter and diff script read the other settings automatically.
+Apply `exclude_paths` when scanning the codebase during Init. The converter scripts read the other settings automatically.
 
-## Arguments
+## Commands
 
-Parse the command arguments to decide which diagram(s) to generate — call this set the **targets**:
+Two commands. There is no bare `/unkode` — if the user gives no subcommand, show them the two options and stop.
 
-- `-mermaid` (alias `-md`) → target is the Mermaid diagram only (`arch_map.md`)
-- `-html` (alias `-reactflow`) → target is the React Flow diagram only (`arch_map.html`)
-- neither given → targets are **both** diagrams
-- `-sync` → additionally re-analyze code changes and update `unkode.yaml` before generating (see Flow below). Can be combined with a diagram flag.
+| Command | What it does |
+|---------|--------------|
+| `init` | Analyze the codebase, write `unkode.yaml`, render both diagrams. Costs tokens. |
+| `init --force` | Same, but overwrites an existing `unkode.yaml`. |
+| `render` | Regenerate diagrams from `unkode.yaml`. No analysis, no tokens. |
+| `render --mermaid` | Render only `arch_map.md`. |
+| `render --html` | Render only `arch_map.html`. |
+
+`init` takes no format flags — it always renders both. To produce just one, run `render` afterwards.
 
 ## Flow
 
-The source of truth is `unkode.yaml`. A full codebase analysis happens **only when `unkode.yaml` does not exist**. When it exists, generation is deterministic and uses no tokens.
+The source of truth is `unkode.yaml`. Everything derived from it is deterministic and uses no tokens.
 
-Run: `python <skill-dir>/preflight.py`
+**`init`**
+- `unkode.yaml` already exists and `--force` was not passed → do not analyze anything. Tell the user:
 
-- **`unkode.yaml` missing** (preflight prints `INIT`) → tell the user: "No baseline architecture found. I'll analyze the codebase and generate it. After this, commit unkode.yaml plus the diagram(s) to main as your baseline. Continue?" Wait for confirmation, then run the **Init Process**. Init writes `unkode.yaml` and generates the targets. Stop — do not run diff (no baseline to compare against yet).
-- **`unkode.yaml` exists, no `-sync`** (preflight prints `UP_TO_DATE` or `SYNC …`) → skip analysis entirely. Go straight to the **Generate Step** for the targets, then stop. Do not sync, do not run diff.
-- **`unkode.yaml` exists, `-sync` passed** → run the **Sync Process** (updates `unkode.yaml` from code changes), then the **Generate Step** for the targets, then the **Diff Process**.
+  > Architecture map already exists (N modules, M externals). Use `/unkode render` to regenerate the diagrams, or `/unkode init --force` to discard it and re-analyze from scratch.
+
+  Stop here.
+- `unkode.yaml` exists and `--force` was passed → warn that this overwrites the existing map including any manual corrections, then run the **Init Process**.
+- `unkode.yaml` missing → run the **Init Process**.
+
+**`render`**
+- `unkode.yaml` missing → tell the user "No architecture map found. Run `/unkode init` first." and stop. Do not analyze the codebase.
+- Otherwise → run the **Generate Step**. Never modify `unkode.yaml`.
 
 ## Generate Step
 
-Generate each target from `unkode.yaml`:
+Generate each requested format from `unkode.yaml`:
 
-- Mermaid target → `python <skill-dir>/yaml_to_mermaid.py unkode.yaml -o arch_map.md`
-- React Flow target → `python <skill-dir>/yaml_to_reactflow.py unkode.yaml -o arch_map.html`
+- Mermaid → `python <skill-dir>/yaml_to_mermaid.py unkode.yaml -o arch_map.md`
+- React Flow → `python <skill-dir>/yaml_to_reactflow.py unkode.yaml -o arch_map.html`
 
-After generating, tell the user which file(s) were written. For the React Flow target, add: "Open arch_map.html in a browser for the interactive view."
+With no format flag, generate both. After generating, tell the user which file(s) were written, and when `arch_map.html` was among them add: "Open arch_map.html in a browser for the interactive view."
 
 ---
 
 ## Init Process
 
-Use this when no `unkode.yaml` exists (first-time setup).
+Builds `unkode.yaml` from scratch.
+
+Before starting, tell the user how long it takes — in **time, not tokens**:
+
+> Analyzing the codebase to build your architecture map. This usually takes 2-5 minutes.
+
+Do not ask for confirmation and do not ask the user to approve module boundaries. This runs end to end without questions; someone who doesn't read the code should be able to run it.
 
 > **Source of truth is the code, not the docs.** Documentation files (README, ARCHITECTURE.md, CONTRIBUTING.md, diagrams in markdown) are often stale, aspirational, or incomplete. Use them only as starting hints. Always verify every module, component, and dependency by reading the actual file tree and import statements. If docs describe a module that doesn't exist in the code, skip it. If docs miss a module that clearly exists in the code, include it.
 
@@ -105,70 +123,20 @@ Use this when no `unkode.yaml` exists (first-time setup).
 - Set `_meta.last_sync_commit` to current HEAD SHA: run `git rev-parse HEAD`
 - Set `_meta.last_sync` to current UTC timestamp
 
-### Step 8: Generate diagrams
-- Run the **Generate Step** for the targets (see Flow above). With no diagram flag, that's both `arch_map.md` and `arch_map.html`.
+### Step 8: Validate
+- Run: `python <skill-dir>/validate.py unkode.yaml`
+- **Errors (exit 2)** mean the map contains things that aren't in the codebase — a path that doesn't exist, a `depends_on` that references nothing, a duplicate name. Fix `unkode.yaml` and re-run until it exits 0 or 1. Do not hand the user a map with unresolved errors.
+- **Warnings (exit 1)** are judgement calls, not defects. Review each one:
+  - *claimed by no module* — decide whether that directory deserves a module, or is genuinely not part of the architecture. Coverage does not need to be 100%.
+  - *circular dependency* — re-check the imports; if the cycle is real, leave it and mention it to the user.
+- Never edit `validate.py` to make a check pass.
 
-### Step 9: Done
-- Tell the user: "Architecture baseline generated. Commit unkode.yaml and the generated diagram(s) to main." If the React Flow target was generated, add: "Open arch_map.html in a browser for the interactive view."
-- Stop here. Do not run diff after init.
+### Step 9: Generate diagrams
+- Run the **Generate Step** for both formats — `arch_map.md` and `arch_map.html`.
 
----
-
-## Sync Process
-
-Use this when `unkode.yaml` exists but is out of date.
-
-### Step 1: Read the current state
-- Read `unkode.yaml` from the project root
-- Note the `_meta.last_sync_commit`
-
-### Step 2: Find what changed
-- Run: `git diff --name-status <last_sync_commit>..HEAD` for committed changes
-- Run: `git diff --name-status HEAD` for uncommitted changes
-- Run: `git diff --name-status --cached` for staged changes
-- Combine all three lists (deduplicate)
-- Exclude `unkode.yaml`, `arch_map.md`, and `arch_map.html` from the list
-- If `last_sync_commit` is not reachable, fall back to analyzing the full codebase
-
-### Step 3: Determine impact
-For each changed file, check:
-- Does it belong to an existing module? (match by `path` prefix)
-- Does it introduce a new dependency? (check imports)
-- Does it belong to a module/component that no longer exists? (deleted files)
-- Does it represent a new area of code not covered by any module? (new directories)
-
-### Step 4: Update the YAML
-- **New directory/area** → add a new module or component
-- **Deleted directory** → remove the module or component
-- **New imports to external services** → add external module if not already listed
-- **Changed dependencies** → update `depends_on`
-- **Renamed/moved code** → update `path` fields
-- **No architectural change** (just logic within existing files) → update only `_meta`
-
-### Step 5: Update metadata
-- Set `_meta.last_sync_commit` to current HEAD SHA: run `git rev-parse HEAD`
-- Set `_meta.last_sync` to current UTC timestamp
-
-### Step 6: Write the updated YAML
-- Write to `unkode.yaml`, preserving the same format
-- Do NOT reorder modules — keep existing order to minimize diff noise
-
-### Step 7: Regenerate diagrams
-- Run the **Generate Step** for the targets (see Flow above).
-
----
-
-## Diff Process
-
-Run after sync (or directly if UP_TO_DATE). Shows architectural changes vs main.
-
-### Step 1: Run the diff script
-- Run: `python <skill-dir>/yaml_diff.py --base-branch main --current unkode.yaml`
-- If the script can't find unkode.yaml on main, tell the user "No baseline on main to compare against."
-
-### Step 2: Show the output
-- If no changes: "No architectural changes vs main."
-- If changes detected: show the text summary to the user.
+### Step 10: Done
+- Tell the user: "Architecture baseline generated. Commit unkode.yaml and the generated diagrams." Add: "Open arch_map.html in a browser for the interactive view."
+- If validation left warnings worth knowing about, mention them in one line.
 
 ---
 
