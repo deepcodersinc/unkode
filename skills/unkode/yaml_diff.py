@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Compare two unkode.yaml files and output a diff Mermaid diagram.
+"""Compare two architecture maps and output a diff Mermaid diagram.
 
 Usage:
     python yaml_diff.py --base base.yaml --current current.yaml
-    python yaml_diff.py --base-branch main                          # extracts base from git
-    python yaml_diff.py --base-branch main --current unkode.yaml
+    python yaml_diff.py --base-branch main       # extracts base from git
 """
 
 import argparse
@@ -14,7 +13,8 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from pathlib import Path
+
+import paths
 
 
 def load_config() -> dict:
@@ -64,7 +64,7 @@ def load_yaml(path: str) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def load_yaml_from_git(branch: str, filepath: str = "unkode.yaml") -> dict:
+def load_yaml_from_git(branch: str, filepath: str = None) -> dict:
     # Fetch latest from remote to ensure we compare against current upstream
     subprocess.run(
         ["git", "fetch", "origin", branch],
@@ -76,15 +76,18 @@ def load_yaml_from_git(branch: str, filepath: str = "unkode.yaml") -> dict:
         refs = [branch]
     else:
         refs = [f"origin/{branch}", branch]
+    # The base branch may predate the move into .unkode/, so try both layouts.
+    filepaths = [filepath] if filepath else paths.arch_candidates()
     for ref in refs:
-        try:
-            result = subprocess.run(
-                ["git", "show", f"{ref}:{filepath}"],
-                capture_output=True, text=True, check=True,
-            )
-            return yaml.safe_load(result.stdout) or {}
-        except subprocess.CalledProcessError:
-            continue
+        for candidate in filepaths:
+            try:
+                result = subprocess.run(
+                    ["git", "show", f"{ref}:{candidate}"],
+                    capture_output=True, text=True, check=True,
+                )
+                return yaml.safe_load(result.stdout) or {}
+            except subprocess.CalledProcessError:
+                continue
     return {}
 
 
@@ -303,10 +306,10 @@ def render_summary(diff: dict) -> str:
 
 def main():
     default_base = load_config().get("base_branch", "main")
-    parser = argparse.ArgumentParser(description="Compare two unkode.yaml files and output diff")
-    parser.add_argument("--base", help="Path to base unkode.yaml file")
+    parser = argparse.ArgumentParser(description="Compare two architecture maps and output diff")
+    parser.add_argument("--base", help="Path to the base architecture map")
     parser.add_argument("--base-branch", default=default_base, help=f"Git branch to extract base from (default: {default_base})")
-    parser.add_argument("--current", default="unkode.yaml", help="Path to current unkode.yaml (default: unkode.yaml)")
+    parser.add_argument("--current", help=f"Path to the current architecture map (default: {paths.ARCH})")
     parser.add_argument("-o", "--output", help="Output markdown file (if omitted, prints to stdout)")
     args = parser.parse_args()
 
@@ -316,13 +319,18 @@ def main():
     else:
         base_data = load_yaml_from_git(args.base_branch)
         if not base_data:
-            print(f"Error: could not read unkode.yaml from branch '{args.base_branch}'", file=sys.stderr)
+            print(f"Error: could not read the architecture map from branch '{args.base_branch}'", file=sys.stderr)
             sys.exit(1)
 
     # Load current
-    curr_data = load_yaml(args.current)
+    current = paths.find_arch(args.current)
+    if not current:
+        print(f"Error: no architecture map found at {paths.ARCH}", file=sys.stderr)
+        sys.exit(1)
+
+    curr_data = load_yaml(current)
     if not curr_data.get("architecture"):
-        print("Error: no architecture section in current unkode.yaml", file=sys.stderr)
+        print(f"Error: no architecture section in {current}", file=sys.stderr)
         sys.exit(1)
 
     base_arch = base_data.get("architecture", [])

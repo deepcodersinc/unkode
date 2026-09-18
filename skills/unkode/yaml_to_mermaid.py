@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Convert unkode.yaml to Mermaid diagram(s).
+"""Convert the architecture map to Mermaid diagram(s).
 
 Usage:
-    python yaml_to_mermaid.py unkode.yaml                  # outputs arch_map.md
-    python yaml_to_mermaid.py unkode.yaml -o output.md     # custom output path
-    python yaml_to_mermaid.py unkode.yaml --split          # separate files
+    python yaml_to_mermaid.py                        # .unkode/arch.yaml -> .unkode/arch_map.md
+    python yaml_to_mermaid.py -o output.md           # custom output path
+    python yaml_to_mermaid.py --split                # separate files
 """
 
 import argparse
@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 
 import yaml
+
+import paths
 
 
 def load_config() -> dict:
@@ -301,7 +303,7 @@ def to_markdown(architecture: list, deployment: list, split: bool = False):
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 def check_staleness(meta: dict) -> str:
-    """Check if unkode.yaml is in sync with current HEAD. Returns warning string or empty."""
+    """Check if the map is in sync with current HEAD. Returns warning string or empty."""
     last_sync = meta.get("last_sync_commit", "")
     if not last_sync:
         return ""
@@ -319,13 +321,18 @@ def check_staleness(meta: dict) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert unkode.yaml to Mermaid diagrams")
-    parser.add_argument("input", help="Path to unkode.yaml")
-    parser.add_argument("-o", "--output", default="arch_map.md", help="Output markdown file (default: arch_map.md)")
+    parser = argparse.ArgumentParser(description="Convert arch.yaml to Mermaid diagrams")
+    parser.add_argument("input", nargs="?", help=f"Path to the architecture map (default: {paths.ARCH})")
+    parser.add_argument("-o", "--output", default=paths.MERMAID, help=f"Output markdown file (default: {paths.MERMAID})")
     parser.add_argument("--split", action="store_true", help="Generate separate files for architecture and deployment")
     args = parser.parse_args()
 
-    with open(args.input, encoding="utf-8") as f:
+    source = paths.find_arch(args.input)
+    if not source:
+        print(f"Error: no architecture map found at {paths.ARCH}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(source, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     architecture = data.get("architecture", [])
@@ -343,6 +350,7 @@ def main():
     if warning:
         arch_md = warning + arch_md
 
+    paths.ensure_dir(args.output)
     output_path = Path(args.output)
     output_path.write_text(arch_md, encoding="utf-8")
     print(f"Written: {output_path}")

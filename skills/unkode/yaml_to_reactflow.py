@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert unkode.yaml to a standalone, interactive React Flow diagram (HTML).
+"""Convert the architecture map to a standalone, interactive React Flow diagram (HTML).
 
 Produces a single self-contained .html file that renders an interactive
 architecture diagram in any browser — no server, no build step, no install.
@@ -8,8 +8,8 @@ fetches, which browsers allow from file:// pages); the architecture itself is
 inlined as JSON, so the page works when opened by double-click.
 
 Usage:
-    python yaml_to_reactflow.py unkode.yaml                 # outputs arch_map.html
-    python yaml_to_reactflow.py unkode.yaml -o arch.html    # custom output path
+    python yaml_to_reactflow.py                      # .unkode/arch.yaml -> .unkode/arch_map.html
+    python yaml_to_reactflow.py -o arch.html         # custom output path
 """
 
 import argparse
@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 import yaml
+
+import paths
 
 
 def load_config() -> dict:
@@ -350,13 +352,18 @@ def render_html(graph: dict, title: str, direction: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert unkode.yaml to a standalone React Flow HTML diagram")
-    parser.add_argument("input", help="Path to unkode.yaml")
-    parser.add_argument("-o", "--output", default="arch_map.html", help="Output HTML file (default: arch_map.html)")
+    parser = argparse.ArgumentParser(description="Convert arch.yaml to a standalone React Flow HTML diagram")
+    parser.add_argument("input", nargs="?", help=f"Path to the architecture map (default: {paths.ARCH})")
+    parser.add_argument("-o", "--output", default=paths.HTML, help=f"Output HTML file (default: {paths.HTML})")
     parser.add_argument("--title", default="Architecture — unkode", help="Diagram title shown in the header")
     args = parser.parse_args()
 
-    with open(args.input, encoding="utf-8") as f:
+    source = paths.find_arch(args.input)
+    if not source:
+        print(f"Error: no architecture map found at {paths.ARCH}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(source, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     architecture = data.get("architecture", [])
@@ -368,6 +375,7 @@ def main():
     graph = build_graph(architecture)
     html_out = render_html(graph, args.title, direction)
 
+    paths.ensure_dir(args.output)
     output_path = Path(args.output)
     output_path.write_text(html_out, encoding="utf-8")
     print(f"Written: {output_path}")

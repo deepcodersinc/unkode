@@ -37,12 +37,14 @@ Click the link → opens an interactive diagram at **[unkode.dev/dashboard](http
 
 **Try it now:** [unkode.dev/dashboard/?repo=deepcodersinc/documenso](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso)
 
-Artifacts in your repo:
+Artifacts in your repo, all under `.unkode/`:
 
-- **`unkode.yaml`** — the architecture as structured data (source of truth)
-- **`arch_map.md`** — Mermaid diagram of the current state (auto-generated, renders inline on GitHub — useful when the repo is private)
-- **`arch_map.html`** — a standalone, interactive React Flow diagram (auto-generated). Double-click to open in any browser — pan, zoom, drag nodes, click a module for its role, dependencies, and components. No server, no build step, no install; works fully offline after the first open.
-- **The dashboard** at unkode.dev needs nothing in your repo beyond `unkode.yaml` — it pulls live from your default branch
+- **`.unkode/arch.yaml`** — the architecture as structured data (source of truth)
+- **`.unkode/arch_map.md`** — Mermaid diagram of the current state (auto-generated, renders inline on GitHub — useful when the repo is private)
+- **`.unkode/arch_map.html`** — a standalone, interactive React Flow diagram (auto-generated). Double-click to open in any browser — pan, zoom, drag nodes, click a module for its role, dependencies, and components. No server, no build step, no install; works fully offline after the first open.
+- **The dashboard** at unkode.dev needs nothing beyond that one YAML — it pulls live from your default branch
+
+> Upgrading from an earlier version? The map used to sit loose in the repo root as `unkode.yaml`. Running `/unkode init` detects the old layout and offers to move it into `.unkode/` — your map is preserved, nothing is re-analyzed.
 
 ---
 
@@ -70,7 +72,7 @@ In Claude Code, from your repo root:
 /unkode init
 ```
 
-This analyzes your codebase, writes `unkode.yaml`, validates it against the actual file tree, and renders both diagrams. Takes 2-5 minutes. Commit `unkode.yaml` and the diagrams as your baseline.
+This analyzes your codebase, writes `.unkode/arch.yaml`, validates it against the actual file tree, and renders both diagrams. Takes 2-5 minutes. Commit the `.unkode/` folder as your baseline.
 
 ### 3. (Recommended) Add the GitHub Action
 
@@ -93,7 +95,7 @@ Once setup is done, this is what your day-to-day looks like:
 
 ```
  ┌──────────────┐     ┌──────────────┐     ┌────────────────┐
- │ /unkode init │────▶│ unkode.yaml  │────▶│ arch_map.md    │
+ │ /unkode init │────▶│ arch.yaml    │────▶│ arch_map.md    │
  │ (once)       │     │ (validated)  │     │ arch_map.html  │
  └──────────────┘     └──────┬───────┘     └────────────────┘
                              │
@@ -105,25 +107,25 @@ Once setup is done, this is what your day-to-day looks like:
 ```
 
 1. **Make code changes** on a branch as you normally would.
-2. **Run `/unkode render`** to regenerate the diagrams from `unkode.yaml`:
+2. **Run `/unkode render`** to regenerate the diagrams from `.unkode/arch.yaml`:
 
    | Command | What it does |
    |---------|--------------|
-   | `/unkode init` | Analyze the codebase, write `unkode.yaml`, render both diagrams. Costs tokens. |
+   | `/unkode init` | Analyze the codebase, write `.unkode/arch.yaml`, render both diagrams. Costs tokens. |
    | `/unkode init --force` | Same, but overwrites an existing map — including any manual edits |
-   | `/unkode render` | Regenerate **both** diagrams from `unkode.yaml` |
-   | `/unkode render --mermaid` | Regenerate **only** `arch_map.md` |
-   | `/unkode render --html` | Regenerate **only** `arch_map.html` |
+   | `/unkode render` | Regenerate **both** diagrams from `.unkode/arch.yaml` |
+   | `/unkode render --mermaid` | Regenerate **only** `.unkode/arch_map.md` |
+   | `/unkode render --html` | Regenerate **only** `.unkode/arch_map.html` |
 
-   `render` never analyzes code and never writes `unkode.yaml` — it's instant and costs zero tokens. `init` is the only command that reads your codebase, and it refuses to run over an existing map unless you pass `--force`.
-3. **Commit and open a PR.** The GitHub Action compares `unkode.yaml` against your base branch and posts a text summary of architectural changes plus a deep link to the interactive dashboard at [unkode.dev/dashboard](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso). Reviewers click through to explore the diff visually.
-4. **Merge.** The updated `unkode.yaml` on main becomes the new baseline for future PRs.
+   `render` never analyzes code and never writes `arch.yaml` — it's instant and costs zero tokens. `init` is the only command that reads your codebase, and it refuses to run over an existing map unless you pass `--force`.
+3. **Commit and open a PR.** The GitHub Action compares `.unkode/arch.yaml` against your base branch and posts a text summary of architectural changes plus a deep link to the interactive dashboard at [unkode.dev/dashboard](https://unkode.dev/dashboard/?repo=deepcodersinc/documenso). Reviewers click through to explore the diff visually.
+4. **Merge.** The updated `.unkode/arch.yaml` on main becomes the new baseline for future PRs.
 
 ---
 
 ## Config
 
-Edit `.claude/skills/unkode/config.yaml` (or `.agents/skills/unkode/config.yaml`):
+Edit `config.yaml` inside the installed skill — `.claude/skills/unkode/config.yaml` (or `.agents/skills/unkode/config.yaml`):
 
 ```yaml
 # The branch to compare against for diffs
@@ -152,7 +154,7 @@ unkode is frugal. Running it doesn't burn through your subscription.
 
 The first run depends less on codebase size and more on **how well-documented the project is**. A 1.5M LOC monorepo with clear package boundaries and READMEs costs roughly the same as a smaller but less organized repo. For best results, add README files and module-level docs before running unkode for the first time — the agent picks up context quickly and produces a sharper architecture map.
 
-Incremental syncs are cheap — they only read the files that changed, not the whole codebase. Everything downstream of the YAML — Mermaid generation, PR diffs, the dashboard — is deterministic and rule-based, no agent involvement, no tokens used.
+Everything downstream of the YAML — validation, Mermaid generation, the React Flow diagram, PR diffs, the dashboard — is deterministic and rule-based. No agent involvement, no tokens used.
 
 ---
 

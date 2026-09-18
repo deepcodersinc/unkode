@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-"""Pre-flight check for /unkode. Determines whether to run init, sync, or skip."""
+"""Pre-flight check for /unkode. Reports whether the map exists and what changed since.
 
-import os
+Prints one of:
+  INIT        no architecture map anywhere
+  UP_TO_DATE  map exists, no code changes since it was built
+  SYNC <n>    map exists, n files changed since it was built
+"""
+
 import subprocess
 import yaml
 
-if not os.path.exists("unkode.yaml"):
+import paths
+
+source = paths.find_arch()
+
+if source is None:
     print("INIT")
 else:
-    with open("unkode.yaml", encoding="utf-8") as f:
+    with open(source, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
     last_sync = data.get("_meta", {}).get("last_sync_commit", "")
@@ -40,10 +49,8 @@ else:
     if staged:
         all_changes.update(staged.splitlines())
 
-    # Exclude unkode's own files
-    all_changes.discard("unkode.yaml")
-    all_changes.discard("arch_map.md")
-    all_changes.discard("arch_map.html")
+    # Unkode's own files are not code changes.
+    all_changes -= paths.OWN_FILES
 
     if not all_changes:
         print("UP_TO_DATE")

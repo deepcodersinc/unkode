@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate unkode.yaml against the codebase.
+"""Validate the architecture map against the codebase.
 
 Run this before writing the map (during init) to catch invented modules,
 unresolved dependencies, and duplicate names while they are still cheap to fix.
@@ -18,11 +18,14 @@ from pathlib import Path
 
 import yaml
 
+import paths
+
 # Directories that are never part of the architecture.
 SKIP_DIRS = {
     ".git", ".svn", ".hg", "node_modules", "dist", "build", "out",
     "target", "vendor", "__pycache__", ".venv", "venv", ".tox",
     ".next", ".nuxt", ".cache", "coverage", ".idea", ".vscode",
+    paths.UNKODE_DIR,
 }
 
 # Test directories are excluded from modules by rule 9, so they never count
@@ -233,11 +236,16 @@ def validate(yaml_path, config):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate unkode.yaml against the codebase")
-    parser.add_argument("input", nargs="?", default="unkode.yaml", help="Path to unkode.yaml")
+    parser = argparse.ArgumentParser(description="Validate the architecture map against the codebase")
+    parser.add_argument("input", nargs="?", help=f"Path to the architecture map (default: {paths.ARCH})")
     args = parser.parse_args()
 
-    result = validate(args.input, load_config())
+    source = paths.find_arch(args.input)
+    if not source:
+        print(f"  ERROR   no architecture map found at {paths.ARCH}")
+        sys.exit(2)
+
+    result = validate(source, load_config())
     if len(result) == 2:
         errors, warnings = result
         summary = None

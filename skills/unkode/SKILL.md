@@ -1,6 +1,6 @@
 ---
 name: unkode
-description: Generate and render an architecture map (unkode.yaml + arch_map.md + arch_map.html) from the codebase
+description: Generate and render an architecture map (.unkode/arch.yaml + Mermaid + React Flow diagrams) from the codebase
 ---
 
 # Unkode — Architecture Map
@@ -20,45 +20,61 @@ Two commands. There is no bare `/unkode` — if the user gives no subcommand, sh
 
 | Command | What it does |
 |---------|--------------|
-| `init` | Analyze the codebase, write `unkode.yaml`, render both diagrams. Costs tokens. |
-| `init --force` | Same, but overwrites an existing `unkode.yaml`. |
-| `render` | Regenerate diagrams from `unkode.yaml`. No analysis, no tokens. |
-| `render --mermaid` | Render only `arch_map.md`. |
-| `render --html` | Render only `arch_map.html`. |
+| `init` | Analyze the codebase, write `.unkode/arch.yaml`, render both diagrams. Costs tokens. |
+| `init --force` | Same, but overwrites an existing map. |
+| `render` | Regenerate diagrams from `.unkode/arch.yaml`. No analysis, no tokens. |
+| `render --mermaid` | Render only `.unkode/arch_map.md`. |
+| `render --html` | Render only `.unkode/arch_map.html`. |
 
 `init` takes no format flags — it always renders both. To produce just one, run `render` afterwards.
 
+## File layout
+
+Everything unkode owns lives in `.unkode/` in the project root:
+
+```
+.unkode/
+  arch.yaml        the architecture map — source of truth
+  arch_map.md      generated Mermaid diagram
+  arch_map.html    generated React Flow diagram
+```
+
+Older versions wrote `unkode.yaml`, `arch_map.md`, and `arch_map.html` loose in the root. The scripts still read a root-level `unkode.yaml` so those repos keep working, but everything they generate goes into `.unkode/`.
+
+**Never hand-write `.unkode/arch.yaml` wholesale.** Rewriting the whole map is what `init --force` is for. Outside of that, only targeted edits — fixing a name, correcting a dependency — are appropriate.
+
 ## Flow
 
-The source of truth is `unkode.yaml`. Everything derived from it is deterministic and uses no tokens.
+The source of truth is `.unkode/arch.yaml`. Everything derived from it is deterministic and uses no tokens.
 
 **`init`**
-- `unkode.yaml` already exists and `--force` was not passed → do not analyze anything. Tell the user:
+- A map exists (either `.unkode/arch.yaml` or a legacy root `unkode.yaml`) and `--force` was not passed → do not analyze anything. Tell the user:
 
   > Architecture map already exists (N modules, M externals). Use `/unkode render` to regenerate the diagrams, or `/unkode init --force` to discard it and re-analyze from scratch.
 
   Stop here.
-- `unkode.yaml` exists and `--force` was passed → warn that this overwrites the existing map including any manual corrections, then run the **Init Process**.
-- `unkode.yaml` missing → run the **Init Process**.
+- A legacy root `unkode.yaml` exists but `.unkode/arch.yaml` does not → **offer to migrate instead of re-analyzing**. Moving costs nothing and keeps the map. Run `git mv unkode.yaml .unkode/arch.yaml` (falling back to a plain move if the file isn't tracked), delete any root-level `arch_map.md` / `arch_map.html`, run the **Generate Step**, and stop. Do not run the Init Process — the existing map is still good.
+- A map exists and `--force` was passed → warn that this overwrites the existing map including any manual corrections, then run the **Init Process**.
+- No map anywhere → run the **Init Process**.
 
 **`render`**
-- `unkode.yaml` missing → tell the user "No architecture map found. Run `/unkode init` first." and stop. Do not analyze the codebase.
-- Otherwise → run the **Generate Step**. Never modify `unkode.yaml`.
+- No map found → tell the user "No architecture map found. Run `/unkode init` first." and stop. Do not analyze the codebase.
+- Otherwise → run the **Generate Step**. Never modify `arch.yaml`.
 
 ## Generate Step
 
-Generate each requested format from `unkode.yaml`:
+The scripts find the map and write into `.unkode/` on their own — pass no arguments:
 
-- Mermaid → `python <skill-dir>/yaml_to_mermaid.py unkode.yaml -o arch_map.md`
-- React Flow → `python <skill-dir>/yaml_to_reactflow.py unkode.yaml -o arch_map.html`
+- Mermaid → `python <skill-dir>/yaml_to_mermaid.py`
+- React Flow → `python <skill-dir>/yaml_to_reactflow.py`
 
-With no format flag, generate both. After generating, tell the user which file(s) were written, and when `arch_map.html` was among them add: "Open arch_map.html in a browser for the interactive view."
+With no format flag, generate both. After generating, tell the user which file(s) were written, and when `arch_map.html` was among them add: "Open .unkode/arch_map.html in a browser for the interactive view."
 
 ---
 
 ## Init Process
 
-Builds `unkode.yaml` from scratch.
+Builds `.unkode/arch.yaml` from scratch.
 
 Before starting, tell the user how long it takes — in **time, not tokens**:
 
@@ -118,24 +134,26 @@ Do not ask for confirmation and do not ask the user to approve module boundaries
 - External services are dependencies too
 - Avoid circular dependencies at the module level
 
-### Step 7: Write unkode.yaml
-- Output to `unkode.yaml` in the project root
+### Step 7: Write the map
+- Create `.unkode/` in the project root if it doesn't exist
+- Write the map to `.unkode/arch.yaml`
 - Set `_meta.last_sync_commit` to current HEAD SHA: run `git rev-parse HEAD`
 - Set `_meta.last_sync` to current UTC timestamp
+- If this was `--force` over a legacy root `unkode.yaml`, delete the old root file and any root-level `arch_map.md` / `arch_map.html` so there is only one map
 
 ### Step 8: Validate
-- Run: `python <skill-dir>/validate.py unkode.yaml`
-- **Errors (exit 2)** mean the map contains things that aren't in the codebase — a path that doesn't exist, a `depends_on` that references nothing, a duplicate name. Fix `unkode.yaml` and re-run until it exits 0 or 1. Do not hand the user a map with unresolved errors.
+- Run: `python <skill-dir>/validate.py`
+- **Errors (exit 2)** mean the map contains things that aren't in the codebase — a path that doesn't exist, a `depends_on` that references nothing, a duplicate name. Fix `.unkode/arch.yaml` and re-run until it exits 0 or 1. Do not hand the user a map with unresolved errors.
 - **Warnings (exit 1)** are judgement calls, not defects. Review each one:
   - *claimed by no module* — decide whether that directory deserves a module, or is genuinely not part of the architecture. Coverage does not need to be 100%.
   - *circular dependency* — re-check the imports; if the cycle is real, leave it and mention it to the user.
 - Never edit `validate.py` to make a check pass.
 
 ### Step 9: Generate diagrams
-- Run the **Generate Step** for both formats — `arch_map.md` and `arch_map.html`.
+- Run the **Generate Step** for both formats.
 
 ### Step 10: Done
-- Tell the user: "Architecture baseline generated. Commit unkode.yaml and the generated diagrams." Add: "Open arch_map.html in a browser for the interactive view."
+- Tell the user: "Architecture baseline generated in `.unkode/`. Commit the folder." Add: "Open .unkode/arch_map.html in a browser for the interactive view."
 - If validation left warnings worth knowing about, mention them in one line.
 
 ---

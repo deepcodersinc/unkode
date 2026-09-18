@@ -1,5 +1,5 @@
 name: 'Unkode Architecture Check'
-description: 'Post architecture diff diagram on PRs when unkode.yaml changes'
+description: 'Post architecture diff diagram on PRs when the architecture map changes'
 
 inputs:
   base-branch:
@@ -38,16 +38,24 @@ runs:
           exit 0
         fi
 
-        # Check if unkode.yaml exists on base branch
+        # The map lives in .unkode/arch.yaml; older repos keep it loose in the root.
         BASE=${{ inputs.base-branch }}
-        if ! git show origin/${BASE}:unkode.yaml > /dev/null 2>&1; then
+        if ! git show origin/${BASE}:.unkode/arch.yaml > /dev/null 2>&1 \
+           && ! git show origin/${BASE}:unkode.yaml > /dev/null 2>&1; then
           echo "has_diff=false" >> $GITHUB_OUTPUT
           echo "no_baseline=true" >> $GITHUB_OUTPUT
           exit 0
         fi
 
-        # Check if unkode.yaml exists on current branch
-        if [ ! -f unkode.yaml ]; then
+        CURRENT=""
+        for f in .unkode/arch.yaml unkode.yaml; do
+          if [ -f "$f" ]; then
+            CURRENT="$f"
+            break
+          fi
+        done
+
+        if [ -z "$CURRENT" ]; then
           echo "has_diff=false" >> $GITHUB_OUTPUT
           echo "no_yaml=true" >> $GITHUB_OUTPUT
           exit 0
@@ -56,7 +64,7 @@ runs:
         # Run diff
         python "$DIFF_SCRIPT" \
           --base-branch "origin/${BASE}" \
-          --current unkode.yaml \
+          --current "$CURRENT" \
           -o /tmp/unkode-diff.md 2>/dev/null
 
         if [ -f /tmp/unkode-diff.md ]; then
@@ -78,9 +86,9 @@ runs:
           const noBaseline = '${{ steps.diff.outputs.no_baseline }}' === 'true';
 
           if (noYaml) {
-            body = '> **Unkode:** No `unkode.yaml` found. Run `/unkode init` to generate the architecture baseline.';
+            body = '> **Unkode:** No architecture map found. Run `/unkode init` to generate the baseline.';
           } else if (noBaseline) {
-            body = '> **Unkode:** No architecture baseline on main yet. Merge `unkode.yaml` to main first.';
+            body = '> **Unkode:** No architecture baseline on main yet. Merge `.unkode/arch.yaml` to main first.';
           } else if (hasDiff) {
             try {
               const diff = fs.readFileSync('/tmp/unkode-diff.md', 'utf8');
