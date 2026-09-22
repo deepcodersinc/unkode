@@ -311,6 +311,8 @@ def main():
     parser.add_argument("--base-branch", default=default_base, help=f"Git branch to extract base from (default: {default_base})")
     parser.add_argument("--current", help=f"Path to the current architecture map (default: {paths.ARCH})")
     parser.add_argument("-o", "--output", help="Output markdown file (if omitted, prints to stdout)")
+    parser.add_argument("--no-diagram", action="store_true",
+                        help="Text summary only, without the Mermaid diff diagram")
     args = parser.parse_args()
 
     # Load base
@@ -341,6 +343,15 @@ def main():
     # Build output
     has_changes = diff["added"] or diff["removed"] or diff["modified"]
     summary = render_summary(diff)
+
+    # The diagram only earns its space when something moved — on an unchanged
+    # architecture it would just redraw the map the reader already has.
+    if has_changes and not args.no_diagram:
+        summary += (
+            "\n\n<details open>\n<summary>Architecture</summary>\n\n"
+            f"```mermaid\n{render_diff_mermaid(diff, curr_arch)}\n```\n\n"
+            "</details>"
+        )
 
     if args.output:
         output = f"# Architecture Diff\n\n{summary}\n"

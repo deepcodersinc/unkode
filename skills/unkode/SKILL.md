@@ -1,6 +1,6 @@
 ---
 name: unkode
-description: Generate and render an architecture map (.unkode/arch.yaml + Mermaid + React Flow diagrams) from the codebase
+description: Generate, sync and render an architecture map (.unkode/arch.yaml + Mermaid + React Flow diagrams) from the codebase
 ---
 
 # Unkode — Architecture Map
@@ -12,21 +12,24 @@ Read `<skill-dir>/config.yaml` at the start. It contains:
 - `diagram_direction` — diagram flow (LR or TB)
 - `base_branch` — used by the PR check, not by these commands
 
-Apply `exclude_paths` when scanning the codebase during Init. The converter scripts read the other settings automatically.
+Apply `exclude_paths` when scanning the codebase during Init and Sync. The converter scripts read the other settings automatically.
 
 ## Commands
 
-Two commands. There is no bare `/unkode` — if the user gives no subcommand, show them the two options and stop.
+Three commands. There is no bare `/unkode` — if the user gives no subcommand, show them the options and stop.
 
 | Command | What it does |
 |---------|--------------|
 | `init` | Analyze the codebase, write `.unkode/arch.yaml`, render both diagrams. Costs tokens. |
 | `init --force` | Same, but overwrites an existing map. |
+| `sync` | Update an existing map from what changed since it was built, then render. Costs tokens. |
 | `render` | Regenerate diagrams from `.unkode/arch.yaml`. No analysis, no tokens. |
 | `render --mermaid` | Render only `.unkode/arch_map.md`. |
 | `render --html` | Render only `.unkode/arch_map.html`. |
 
-`init` takes no format flags — it always renders both. To produce just one, run `render` afterwards.
+Neither `init` nor `sync` takes format flags — both render both diagrams. To produce just one, run `render` afterwards.
+
+**`init` rebuilds from scratch; `sync` patches what exists.** Use `sync` on a branch before opening a pull request — it only reads the files that changed, and it leaves every untouched name and description exactly as it found them, so the diff shows real architectural movement rather than reworded output.
 
 ## File layout
 
@@ -56,6 +59,12 @@ The source of truth is `.unkode/arch.yaml`. Everything derived from it is determ
 - A legacy root `unkode.yaml` exists but `.unkode/arch.yaml` does not → **offer to migrate instead of re-analyzing**. Moving costs nothing and keeps the map. Run `git mv unkode.yaml .unkode/arch.yaml` (falling back to a plain move if the file isn't tracked), delete any root-level `arch_map.md` / `arch_map.html`, run the **Generate Step**, and stop. Do not run the Init Process — the existing map is still good.
 - A map exists and `--force` was passed → warn that this overwrites the existing map including any manual corrections, then run the **Init Process**.
 - No map anywhere → run the **Init Process**.
+
+**`sync`**
+- No map found → tell the user "No architecture map found. Run `/unkode init` first." and stop.
+- Otherwise → run `python <skill-dir>/preflight.py` and act on what it prints:
+  - `UP_TO_DATE` → nothing has changed since the map was built. Say so and stop; do not spend tokens re-reading the codebase.
+  - `SYNC <n>` → run the **Sync Process** for those `n` files.
 
 **`render`**
 - No map found → tell the user "No architecture map found. Run `/unkode init` first." and stop. Do not analyze the codebase.
@@ -155,6 +164,68 @@ Do not ask for confirmation and do not ask the user to approve module boundaries
 ### Step 10: Done
 - Tell the user: "Architecture baseline generated in `.unkode/`. Commit the folder." Add: "Open .unkode/arch_map.html in a browser for the interactive view."
 - If validation left warnings worth knowing about, mention them in one line.
+
+---
+
+## Sync Process
+
+Updates an existing map from what changed since it was last built. Reads only the changed files, never the whole codebase.
+
+> **Change as little as possible.** Everything you do not have positive evidence to change must come through byte-identical — names, roles, descriptions, `tech` lists, ordering. A sync that reworks wording produces a diff full of renames that hide the one real change, and a reviewer stops trusting the output. If a module is untouched by this change set, do not rewrite its role sentence because you would have phrased it differently.
+
+### Step 1: Read the current state
+- Read `.unkode/arch.yaml`
+- Note `_meta.last_sync_commit`
+
+### Step 2: Find what changed
+- Run `python <skill-dir>/preflight.py` — it reports `UP_TO_DATE` or `SYNC <n>`, already excluding unkode's own files
+- For the file list itself:
+  - `git diff --name-status <last_sync_commit>..HEAD` — committed since the map was built
+  - `git diff --name-status HEAD` — uncommitted
+  - `git diff --name-status --cached` — staged
+- Combine and deduplicate; ignore anything under `.unkode/`
+- Apply `exclude_paths` from config
+- If `last_sync_commit` is not reachable — a rebase, squash-merge or shallow clone — **stop and tell the user**. Do not silently re-analyze the whole codebase; that is `init --force`, it costs far more, and it discards manual corrections. Let them choose.
+
+### Step 3: Determine impact
+For each changed file:
+- Which module owns it? (longest matching `path` prefix)
+- Does it add or remove an import that crosses a module boundary?
+- Does it reference a service, SDK or connection string that is not already an external?
+- Was it deleted, and is its module's `path` now empty?
+- Does it sit in a directory no module claims?
+
+Read the changed files themselves. Do not infer from filenames.
+
+### Step 4: Update the map
+- **New directory no module claims** → add a module, or a component if it belongs inside one
+- **Module path now empty** → remove that module and every `depends_on` referencing it
+- **New cross-module import** → add to `depends_on`
+- **Import removed, and no other file in the module uses it** → remove from `depends_on`
+- **New SDK, client or connection string** → add an external if it is not already listed
+- **Files moved** → update `path`
+- **Logic changed inside existing files, no boundary crossed** → change nothing but `_meta`
+
+That last case is the common one. It is a correct and complete outcome — say so rather than inventing a change.
+
+### Step 5: Update metadata
+- `_meta.last_sync_commit` → current HEAD SHA (`git rev-parse HEAD`)
+- `_meta.last_sync` → current UTC timestamp
+
+### Step 6: Write the map
+- Write to `.unkode/arch.yaml`, preserving format and key order
+- Do **not** reorder modules; append new ones at the end of the architecture list
+- Do not reflow or rewrap untouched lines
+
+### Step 7: Validate
+- Run `python <skill-dir>/validate.py` and treat errors and warnings exactly as Init Step 8 does
+
+### Step 8: Generate diagrams
+- Run the **Generate Step** for both formats
+
+### Step 9: Report
+- Say what moved, in one line per change — "added module X", "Storefront now depends on Data Access Layer", or "no architectural change; only `_meta` updated"
+- Remind the user to commit `.unkode/` along with their code, so the pull request carries both
 
 ---
 

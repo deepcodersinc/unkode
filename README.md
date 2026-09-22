@@ -13,7 +13,7 @@ If you find this useful, a GitHub star ⭐ would be much appreciated.
 
 ## What it looks like
 
-On every PR, unkode posts a clean text summary of what changed plus a link to the live interactive dashboard:
+On every PR, unkode posts a summary of what changed, a colour-coded diagram of where it changed, and a link to the live interactive dashboard:
 
 ```
 # Architecture Diff
@@ -27,9 +27,13 @@ On every PR, unkode posts a clean text summary of what changed plus a link to th
     + depends on Authentication
 
 **Total:** 2 added, 0 removed, 1 modified
+```
 
----
+Below that, a Mermaid diagram of the whole architecture with the changes picked out — green for added, red dashed for removed, amber for modified, and dashed labelled arrows for new or dropped dependencies. Everything unchanged stays unstyled so the eye goes straight to what moved.
 
+Then a deep link:
+
+```
 [Open interactive view](https://unkode.dev/dashboard/?repo=owner/name&pr=123) — explore the changes in unkode.dev
 ```
 
