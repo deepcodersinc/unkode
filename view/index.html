@@ -157,13 +157,22 @@
         return match ? match[1].trim() : null;
       }
 
+      // The diagram lives at .unkode/arch_map.md. Repos set up before that
+      // layout keep it loose in the root, so both are tried.
+      const DIAGRAM_PATHS = ['/.unkode/arch_map.md', '/arch_map.md'];
+
       async function render(repo) {
         const rawBase = 'https://raw.githubusercontent.com/' + repo + '/' + branch;
-        const archUrl = rawBase + '/arch_map.md';
 
         try {
-          const res = await fetch(archUrl, { cache: 'no-cache' });
-          if (res.status === 404) {
+          let res = null;
+          for (const path of DIAGRAM_PATHS) {
+            const attempt = await fetch(rawBase + path, { cache: 'no-cache' });
+            if (attempt.status === 404) continue;
+            res = attempt;
+            break;
+          }
+          if (!res) {
             show(stateEmpty);
             return;
           }

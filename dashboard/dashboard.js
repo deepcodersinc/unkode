@@ -31,12 +31,34 @@ const BRANCH = (params.get('branch') || 'main').trim();
 
 // ---- Fetchers ---------------------------------------------------------------
 
+// The map lives at .unkode/arch.yaml. Repos set up before that layout keep it
+// loose in the root as unkode.yaml, so both are tried.
+const MAP_PATHS = ['.unkode/arch.yaml', 'unkode.yaml'];
+
 async function fetchYamlAtRef(repo, ref) {
-  const url = `https://raw.githubusercontent.com/${repo}/${ref}/unkode.yaml`;
-  const res = await fetch(url, { cache: 'no-cache' });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching unkode.yaml at ${ref}`);
-  return yaml.load(await res.text());
+  let lastError = null;
+
+  for (const path of MAP_PATHS) {
+    const url = `https://raw.githubusercontent.com/${repo}/${ref}/${path}`;
+    let res;
+    try {
+      res = await fetch(url, { cache: 'no-cache' });
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+    if (res.status === 404) continue;
+    if (!res.ok) {
+      lastError = new Error(`HTTP ${res.status} fetching ${path} at ${ref}`);
+      continue;
+    }
+    return yaml.load(await res.text());
+  }
+
+  // Every path 404'd: the repo genuinely has no map, which the caller renders
+  // as a setup prompt rather than an error.
+  if (lastError) throw lastError;
+  return null;
 }
 
 async function fetchDefaultBranch(repo) {
@@ -205,7 +227,7 @@ function SidebarDetails({ selected }) {
         <div class="sidebarEmptyIcon">◆</div>
         <div class="sidebarEmptyTitle">Click a module to see details</div>
         <div class="sidebarEmptyDesc">
-          Architecture rendered from <code>unkode.yaml</code> in the repo.
+          Architecture rendered from <code>.unkode/arch.yaml</code> in the repo.
         </div>
       </div>
     `;
@@ -524,10 +546,10 @@ function App() {
     return html`
       <div class="dashState">
         <div class="stateIcon">◆</div>
-        <div class="stateTitle">unkode.yaml not found</div>
+        <div class="stateTitle">No architecture map found</div>
         <div class="stateDesc">
           ${PR ? `PR #${PR} doesn't have ` : 'This repo doesn\'t have '}
-          <code>unkode.yaml</code> committed. Set up unkode to start tracking architecture.
+          <code>.unkode/arch.yaml</code> committed. Set up unkode to start tracking architecture.
         </div>
         <div class="stateActions">
           <a class="ctaPrimary" href="https://github.com/deepcodersinc/unkode#quick-setup" target="_blank" rel="noopener">Get started →</a>
