@@ -37,6 +37,13 @@ TEST_DIR_NAMES = {
 
 DISPLAY_LIMIT = 10
 
+# Separator for a component reference that crosses a module boundary.
+QUALIFIER = " > "
+
+# A module with at least this many source files directly under it, and no
+# components, is almost certainly hiding distinct responsibilities.
+SPLIT_THRESHOLD = 3
+
 
 def load_config():
     cfg_path = Path(__file__).parent / "config.yaml"
@@ -151,17 +158,28 @@ def validate(yaml_path, config):
         elif not target.is_dir():
             warnings.append(f"{m['name']} -> path '{path}' is a file, expected a directory")
 
-    # depends_on must reference exact names from other entries (rule 3).
-    for m in modules:
-        for dep in m.get("depends_on", []) or []:
-            if dep not in all_names:
-                errors.append(f"{m['name']} -> depends_on '{dep}' does not resolve")
-
-    # Component names must be unique within their module: the Mermaid converter
-    # resolves component dependencies by bare name.
-    component_owners = {}
+    # A component's path may be a directory or a single file (rule 5), but it
+    # has to exist - same hallucination check the modules get.
     for m in internals:
-        local = set()
+        for comp in m.get("components", []) or []:
+            if not isinstance(comp, dict):
+                continue
+            cpath = (comp.get("path") or "").strip()
+            if not cpath:
+                warnings.append(f"{m['name']}{QUALIFIER}{comp.get('name', '?')} -> no path set")
+            elif not Path(cpath).exists():
+                errors.append(
+                    f"{m['name']}{QUALIFIER}{comp.get('name', '?')} -> "
+                    f"path '{cpath}' does not exist"
+                )
+
+    tracked = tracked_files()
+
+    # Index components so dependencies can be resolved (rule 3).
+    components_of = {}          # module name -> {component name: component}
+    component_owners = {}       # component name -> [module names]
+    for m in internals:
+        local = {}
         for comp in m.get("components", []) or []:
             if not isinstance(comp, dict) or not comp.get("name"):
                 errors.append(f"{m['name']} -> component with no name")
@@ -169,15 +187,82 @@ def validate(yaml_path, config):
             cname = comp["name"]
             if cname in local:
                 errors.append(f"{m['name']} -> duplicate component '{cname}'")
-            local.add(cname)
+            local[cname] = comp
             component_owners.setdefault(cname, []).append(m["name"])
+        components_of[m["name"]] = local
 
+    # A bare name is a sibling component, a module, or an external. Anything
+    # crossing a module boundary must be written "Module > Component".
     for cname, owners in component_owners.items():
         if len(owners) > 1:
-            errors.append(
-                f"component '{cname}' appears in {len(owners)} modules "
-                f"({', '.join(owners)}) - dependencies on it are ambiguous"
+            warnings.append(
+                f"component '{cname}' exists in {len(owners)} modules "
+                f"({', '.join(owners)}) - reference it as 'Module > {cname}'"
             )
+
+    def resolve(dep, within=None):
+        """True when `dep` names something real, seen from module `within`."""
+        if QUALIFIER in dep:
+            owner, _, child = dep.partition(QUALIFIER)
+            return child.strip() in components_of.get(owner.strip(), {})
+        if within and dep in components_of.get(within, {}):
+            return True                     # sibling component
+        return dep in all_names             # module or external
+
+    for m in modules:
+        for dep in m.get("depends_on", []) or []:
+            if not resolve(dep, within=m["name"]):
+                errors.append(f"{m['name']} -> depends_on '{dep}' does not resolve")
+
+    # Component-level dependencies. These carry the request-level detail, so an
+    # unresolved one is as wrong as an unresolved module edge.
+    edged = 0
+    total_components = 0
+    for m in internals:
+        for comp in m.get("components", []) or []:
+            if not isinstance(comp, dict) or not comp.get("name"):
+                continue
+            total_components += 1
+            deps = comp.get("depends_on") or []
+            if deps:
+                edged += 1
+            for dep in deps:
+                if resolve(dep, within=m["name"]):
+                    continue
+                hint = ""
+                if QUALIFIER not in dep and dep in component_owners:
+                    hint = f" (did you mean '{component_owners[dep][0]}{QUALIFIER}{dep}'?)"
+                errors.append(
+                    f"{m['name']}{QUALIFIER}{comp['name']} -> depends_on "
+                    f"'{dep}' does not resolve{hint}"
+                )
+
+    # A module with several source files and no components collapses all its
+    # callers onto one node, which costs the map its precision.
+    direct_source = {}
+    for f in tracked:
+        parent = "/".join(f.split("/")[:-1])
+        name = f.split("/")[-1]
+        if name == "__init__.py" or any(part in SKIP_DIRS for part in f.split("/")):
+            continue
+        direct_source.setdefault(parent, 0)
+        direct_source[parent] += 1
+
+    for m in internals:
+        if m.get("components"):
+            continue
+        mpath = (m.get("path") or "").strip().rstrip("/")
+        if mpath and direct_source.get(mpath, 0) >= SPLIT_THRESHOLD:
+            warnings.append(
+                f"{m['name']} -> {direct_source[mpath]} source files and no components; "
+                f"every caller points at one node"
+            )
+
+    if total_components and not edged:
+        warnings.append(
+            f"none of the {total_components} components record depends_on - "
+            f"the map cannot show how a request moves through the system"
+        )
 
     # Deployment references must resolve too.
     deployment = data.get("deployment") or []
@@ -202,7 +287,7 @@ def validate(yaml_path, config):
     module_paths = [(m.get("path") or "").strip().rstrip("/") for m in internals]
     module_paths = [p for p in module_paths if p]
 
-    candidates = dirs_holding_files(tracked_files())
+    candidates = dirs_holding_files(tracked)
     unclaimed = []
     for d in sorted(candidates):
         if any(part in TEST_DIR_NAMES for part in d.split("/")):
@@ -229,6 +314,8 @@ def validate(yaml_path, config):
     summary = {
         "modules": len(internals),
         "externals": len(modules) - len(internals),
+        "components": total_components,
+        "components_edged": edged,
         "claimed": claimed_count,
         "total_dirs": len(candidates),
     }
@@ -258,10 +345,14 @@ def main():
         print(f"  WARN    {w}")
 
     if summary:
-        print(
+        line = (
             f"\n  {summary['modules']} modules, {summary['externals']} externals | "
             f"{summary['claimed']} of {summary['total_dirs']} source directories claimed"
         )
+        if summary.get("components"):
+            line += (f"\n  {summary['components']} components, "
+                     f"{summary['components_edged']} with dependencies")
+        print(line)
 
     if errors:
         print(f"\n  {len(errors)} error(s), {len(warnings)} warning(s) - map is not valid")

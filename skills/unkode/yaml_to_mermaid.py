@@ -68,7 +68,50 @@ def shape_node(node_id: str, label: str, kind: str | None, is_external: bool) ->
 LIGHT_THEME_INIT = "%%{init: {'theme':'neutral'}}%%"
 
 
+QUALIFIER = " > "
+
+
+def component_id(module_name: str, component_name: str) -> str:
+    return sanitize_id(f"{module_name}_{component_name}")
+
+
+def build_index(modules: list) -> dict:
+    """Map every referable name to the node id that represents it.
+
+    Components are addressed as "Module > Component" across a boundary and by
+    bare name within their own module, so the index is keyed per module.
+    """
+    modules_by_name = {m["name"]: m for m in modules}
+    components = {}                 # (module, component) -> node id
+    for mod in modules:
+        for comp in mod.get("components") or []:
+            if isinstance(comp, dict) and comp.get("name"):
+                components[(mod["name"], comp["name"])] = component_id(mod["name"], comp["name"])
+    return {"modules": modules_by_name, "components": components}
+
+
+def resolve_ref(dep: str, index: dict, within: str):
+    """Resolve a depends_on entry to (node_id, owning_module) or None."""
+    if QUALIFIER in dep:
+        owner, _, child = dep.partition(QUALIFIER)
+        owner, child = owner.strip(), child.strip()
+        key = (owner, child)
+        if key in index["components"]:
+            return index["components"][key], owner
+        return None
+    key = (within, dep)
+    if key in index["components"]:                  # sibling component
+        return index["components"][key], within
+    if dep in index["modules"]:                     # module or external
+        return sanitize_id(dep), dep
+    return None
+
+
 def render_architecture(modules: list) -> str:
+    """Module-level overview. One node per module, no components.
+
+    This is the diagram someone reads first, so it stays at a single altitude.
+    """
     direction = load_config().get("diagram_direction", "LR")
     lines = [LIGHT_THEME_INIT, f"graph {direction}"]
 
@@ -76,17 +119,58 @@ def render_architecture(modules: list) -> str:
     internals = [m for m in modules if m.get("type") != "external"]
 
     for mod in internals:
+        tech = ", ".join(mod.get("tech", []))
+        label = mod["name"] + (f" [{tech}]" if tech else "")
+        lines.append(f'    {shape_node(sanitize_id(mod["name"]), escape_label(label), mod.get("kind"), False)}')
+
+    if externals:
+        lines.append("")
+        for ext in externals:
+            lines.append(f'    {shape_node(sanitize_id(ext["name"]), escape_label(ext["name"]), ext.get("kind"), True)}')
+
+    lines.append("")
+    index = build_index(modules)
+    seen = set()
+    for mod in internals:
+        mid = sanitize_id(mod["name"])
+        for dep in mod.get("depends_on", []) or []:
+            # A module edge may name a component; roll it up to its owner.
+            resolved = resolve_ref(dep, index, within=mod["name"])
+            if not resolved:
+                continue
+            _, owner = resolved
+            did = sanitize_id(owner)
+            if did == mid or (mid, did) in seen:
+                continue
+            seen.add((mid, did))
+            lines.append(f"    {mid} --> {did}")
+
+    return "\n".join(lines)
+
+
+def render_components(modules: list) -> str:
+    """Component-level detail: how work actually moves through the system.
+
+    Modules that have components become containers; modules that do not stay as
+    single nodes so edges into them still land somewhere.
+    """
+    direction = load_config().get("diagram_direction", "LR")
+    lines = [LIGHT_THEME_INIT, f"graph {direction}"]
+
+    externals = [m for m in modules if m.get("type") == "external"]
+    internals = [m for m in modules if m.get("type") != "external"]
+    if not any(m.get("components") for m in internals):
+        return ""
+
+    for mod in internals:
         mid = sanitize_id(mod["name"])
         tech = ", ".join(mod.get("tech", []))
-        label = f'{mod["name"]}'
-        if tech:
-            label += f" [{tech}]"
-
-        comps = mod.get("components", [])
+        label = mod["name"] + (f" [{tech}]" if tech else "")
+        comps = mod.get("components") or []
         if comps:
             lines.append(f'    subgraph {mid}["{escape_label(label)}"]')
             for comp in comps:
-                cid = sanitize_id(f'{mod["name"]}_{comp["name"]}')
+                cid = component_id(mod["name"], comp["name"])
                 lines.append(f'        {shape_node(cid, escape_label(comp["name"]), mod.get("kind"), False)}')
             lines.append("    end")
         else:
@@ -95,35 +179,32 @@ def render_architecture(modules: list) -> str:
     if externals:
         lines.append("")
         for ext in externals:
-            eid = sanitize_id(ext["name"])
-            lines.append(f'    {shape_node(eid, escape_label(ext["name"]), ext.get("kind"), True)}')
+            lines.append(f'    {shape_node(sanitize_id(ext["name"]), escape_label(ext["name"]), ext.get("kind"), True)}')
 
     lines.append("")
-    all_names = {m["name"] for m in modules}
-    for mod in internals:
-        mid = sanitize_id(mod["name"])
-        for dep in mod.get("depends_on", []):
-            if dep not in all_names:
-                continue
-            did = sanitize_id(dep)
-            lines.append(f"    {mid} --> {did}")
+    index = build_index(modules)
+    seen = set()
+
+    def edge(src: str, dep: str, within: str) -> None:
+        resolved = resolve_ref(dep, index, within)
+        if not resolved:
+            return
+        dst, _ = resolved
+        if dst == src or (src, dst) in seen:
+            return
+        seen.add((src, dst))
+        lines.append(f"    {src} --> {dst}")
 
     for mod in internals:
-        for comp in mod.get("components", []):
-            cid = sanitize_id(f'{mod["name"]}_{comp["name"]}')
-            for dep in comp.get("depends_on", []):
-                found = False
-                for other_mod in internals:
-                    for other_comp in other_mod.get("components", []):
-                        if other_comp["name"] == dep:
-                            did = sanitize_id(f'{other_mod["name"]}_{other_comp["name"]}')
-                            lines.append(f"    {cid} --> {did}")
-                            found = True
-                            break
-                    if found:
-                        break
-                if not found and dep in all_names:
-                    lines.append(f"    {cid} --> {sanitize_id(dep)}")
+        comps = mod.get("components") or []
+        for comp in comps:
+            cid = component_id(mod["name"], comp["name"])
+            for dep in comp.get("depends_on", []) or []:
+                edge(cid, dep, within=mod["name"])
+        if not comps:
+            # No components, so its own dependencies are the only thing to draw.
+            for dep in mod.get("depends_on", []) or []:
+                edge(sanitize_id(mod["name"]), dep, within=mod["name"])
 
     return "\n".join(lines)
 
@@ -200,15 +281,7 @@ def render_combined(architecture: list, deployment: list) -> str:
                 label = mod["name"]
                 if tech_m:
                     label += f" [{tech_m}]"
-                comps = mod.get("components", [])
-                if comps:
-                    lines.append(f'        subgraph {mid}["{escape_label(label)}"]')
-                    for comp in comps:
-                        cid = sanitize_id(f'{mod["name"]}_{comp["name"]}')
-                        lines.append(f'            {shape_node(cid, escape_label(comp["name"]), mod.get("kind"), False)}')
-                    lines.append("        end")
-                else:
-                    lines.append(f'        {shape_node(mid, escape_label(label), mod.get("kind"), False)}')
+                lines.append(f'        {shape_node(mid, escape_label(label), mod.get("kind"), False)}')
             lines.append("    end")
 
     # Unhosted internal modules
@@ -220,15 +293,7 @@ def render_combined(architecture: list, deployment: list) -> str:
         label = mod["name"]
         if tech:
             label += f" [{tech}]"
-        comps = mod.get("components", [])
-        if comps:
-            lines.append(f'    subgraph {mid}["{escape_label(label)}"]')
-            for comp in comps:
-                cid = sanitize_id(f'{mod["name"]}_{comp["name"]}')
-                lines.append(f'        {shape_node(cid, escape_label(comp["name"]), mod.get("kind"), False)}')
-            lines.append("    end")
-        else:
-            lines.append(f'    {shape_node(mid, escape_label(label), mod.get("kind"), False)}')
+        lines.append(f'    {shape_node(mid, escape_label(label), mod.get("kind"), False)}')
 
     # External services
     if externals:
@@ -261,6 +326,19 @@ def to_markdown(architecture: list, deployment: list, split: bool = False):
     else:
         combined = render_combined(architecture, deployment)
         sections = [f"# Architecture\n\n```mermaid\n{combined}\n```\n"]
+
+        # Component-level view: the same system at the altitude a request travels
+        component_diagram = render_components(architecture)
+        if component_diagram:
+            sections.append("---\n")
+            sections.append(
+                "## Components\n\nHow work moves through the system. Modules that "
+                "have components are drawn as containers.\n"
+            )
+            sections.append(
+                f"<details>\n<summary>Show the component diagram</summary>\n\n"
+                f"```mermaid\n{component_diagram}\n```\n\n</details>\n"
+            )
 
         # Module index
         internals = [m for m in architecture if m.get("type") != "external"]

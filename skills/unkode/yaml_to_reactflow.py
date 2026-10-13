@@ -39,20 +39,46 @@ def sanitize_id(name: str) -> str:
 
 # ── Model → graph ────────────────────────────────────────────────────────────
 
+QUALIFIER = " > "
+
+
+def component_id(module_name: str, component_name: str) -> str:
+    return sanitize_id(f"{module_name}__{component_name}")
+
+
+def _resolve(dep: str, within: str, component_ids: dict, module_names: set):
+    """A depends_on entry -> (node id, owning module) at component altitude."""
+    if QUALIFIER in dep:
+        owner, _, child = dep.partition(QUALIFIER)
+        key = (owner.strip(), child.strip())
+        return (component_ids[key], key[0]) if key in component_ids else None
+    key = (within, dep)
+    if key in component_ids:                      # sibling component
+        return component_ids[key], within
+    if dep in module_names:                       # module or external
+        return sanitize_id(dep), dep
+    return None
+
+
 def build_graph(architecture: list) -> dict:
-    """Turn the architecture list into nodes + edges for React Flow.
+    """Build two views of the same map.
 
-    Modules and external services become nodes; `depends_on` becomes edges.
-    Components are attached to their module node's data for the detail panel
-    (matching how the Mermaid generator groups them inside a subgraph).
+    `modules` is the overview - one node per module. `components` expands every
+    module that has them, so an edge lands on the component that actually owns
+    the dependency rather than on the whole module.
     """
-    all_names = {m["name"] for m in architecture}
+    module_names = {m["name"] for m in architecture}
     id_of = {m["name"]: sanitize_id(m["name"]) for m in architecture}
+    component_ids = {
+        (m["name"], c["name"]): component_id(m["name"], c["name"])
+        for m in architecture
+        for c in (m.get("components") or [])
+        if isinstance(c, dict) and c.get("name")
+    }
 
-    nodes = []
-    for mod in architecture:
+    def module_node(mod):
         is_external = mod.get("type") == "external"
-        nodes.append({
+        return {
             "id": id_of[mod["name"]],
             "name": mod["name"],
             "kind": mod.get("kind") or ("other" if is_external else "backend"),
@@ -60,30 +86,82 @@ def build_graph(architecture: list) -> dict:
             "tech": mod.get("tech", []),
             "role": mod.get("role", ""),
             "path": mod.get("path", ""),
-            "dependsOn": [d for d in mod.get("depends_on", []) if d in all_names],
+            "dependsOn": [d for d in mod.get("depends_on", []) if d in module_names],
             "components": [
                 {"name": c["name"], "description": c.get("description", "")}
-                for c in mod.get("components", []) if isinstance(c, dict)
+                for c in (mod.get("components") or []) if isinstance(c, dict)
             ],
-            # status is reserved for the diff view: added | removed | modified | None
             "status": mod.get("_status"),
-        })
+        }
 
-    edges = []
-    seen = set()
+    # ── module view ──────────────────────────────────────────────────────────
+    module_nodes = [module_node(m) for m in architecture]
+    module_edges, seen = [], set()
     for mod in architecture:
         src = id_of[mod["name"]]
-        for dep in mod.get("depends_on", []):
-            if dep not in all_names:
+        for dep in mod.get("depends_on", []) or []:
+            resolved = _resolve(dep, mod["name"], component_ids, module_names)
+            if not resolved:
                 continue
-            tgt = id_of[dep]
-            key = (src, tgt)
-            if key in seen:
+            tgt = sanitize_id(resolved[1])          # roll a component up to its module
+            if tgt == src or (src, tgt) in seen:
                 continue
-            seen.add(key)
-            edges.append({"id": f"{src}__{tgt}", "source": src, "target": tgt})
+            seen.add((src, tgt))
+            module_edges.append({"id": f"{src}__{tgt}", "source": src, "target": tgt})
 
-    return {"nodes": nodes, "edges": edges}
+    # ── component view ───────────────────────────────────────────────────────
+    comp_nodes, comp_edges, seen = [], [], set()
+    for mod in architecture:
+        comps = mod.get("components") or []
+        if not comps:
+            comp_nodes.append(module_node(mod))
+            continue
+        for c in comps:
+            if not isinstance(c, dict) or not c.get("name"):
+                continue
+            comp_nodes.append({
+                "id": component_ids[(mod["name"], c["name"])],
+                "name": c["name"],
+                "parent": mod["name"],
+                "kind": mod.get("kind") or "backend",
+                "isExternal": False,
+                "tech": [],
+                "role": c.get("description", ""),
+                "path": c.get("path", ""),
+                "dependsOn": c.get("depends_on", []) or [],
+                "components": [],
+                "status": c.get("_status"),
+            })
+
+    def add_edge(src, dep, within):
+        resolved = _resolve(dep, within, component_ids, module_names)
+        if not resolved:
+            return
+        tgt = resolved[0]
+        if tgt == src or (src, tgt) in seen:
+            return
+        seen.add((src, tgt))
+        comp_edges.append({"id": f"{src}__{tgt}", "source": src, "target": tgt})
+
+    for mod in architecture:
+        comps = mod.get("components") or []
+        if comps:
+            for c in comps:
+                if isinstance(c, dict) and c.get("name"):
+                    cid = component_ids[(mod["name"], c["name"])]
+                    for dep in c.get("depends_on", []) or []:
+                        add_edge(cid, dep, mod["name"])
+        else:
+            for dep in mod.get("depends_on", []) or []:
+                add_edge(id_of[mod["name"]], dep, mod["name"])
+
+    return {
+        "nodes": module_nodes, "edges": module_edges,          # back-compat
+        "views": {
+            "modules": {"nodes": module_nodes, "edges": module_edges},
+            "components": {"nodes": comp_nodes, "edges": comp_edges},
+        },
+    }
 
 
 # ── HTML template ────────────────────────────────────────────────────────────
@@ -115,7 +193,15 @@ HTML_TEMPLATE = r"""<!doctype html>
     backdrop-filter: blur(6px);
   }
   header h1 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: .2px; }
+  header .viewtabs { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; }
+  header .viewtabs button {
+    font: inherit; font-size: 12px; padding: 3px 11px; border: 0; cursor: pointer;
+    background: transparent; color: #475569;
+  }
+  header .viewtabs button.active { background: #0f172a; color: #fff; }
+  header .viewtabs button:not(.active):hover { background: #e2e8f0; }
   header .legend { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: #475569; }
+  .node .parent { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; opacity: .55; margin-bottom: 2px; }
   header .legend span { display: inline-flex; align-items: center; gap: 5px; }
   header .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; border: 1.5px solid; }
 
@@ -157,6 +243,10 @@ HTML_TEMPLATE = r"""<!doctype html>
   @media (prefers-color-scheme: dark) {
     body { background: #0b1120; color: #e2e8f0; }
     header { background: rgba(11,17,32,0.9); border-color: #1e293b; }
+    header .viewtabs { border-color: #334155; }
+    header .viewtabs button { color: #94a3b8; }
+    header .viewtabs button.active { background: #e2e8f0; color: #0b1120; }
+    header .viewtabs button:not(.active):hover { background: #1e293b; }
     header .legend { color: #94a3b8; }
     .node { background: #1e293b; box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
     .node.external { background: #172033; }
@@ -227,8 +317,9 @@ function ArchNode({ data, selected }) {
   return html`
     <div class=${cls.join(" ")} style=${style}>
       <${Handle} type="target" position=${DIRECTION === "LR" ? Position.Left : Position.Top} style=${{ opacity: 0 }} />
+      ${data.parent ? html`<div class="parent">${data.parent}</div>` : null}
       <div class="title">${data.name}</div>
-      <div class="kind">${data.isExternal ? "ext · " : ""}${data.kind}</div>
+      ${data.parent ? null : html`<div class="kind">${data.isExternal ? "ext · " : ""}${data.kind}</div>`}
       ${data.tech && data.tech.length
         ? html`<div class="tech">${data.tech.join(", ")}</div>` : null}
       <${Handle} type="source" position=${DIRECTION === "LR" ? Position.Right : Position.Bottom} style=${{ opacity: 0 }} />
@@ -265,23 +356,37 @@ function DetailPanel({ node }) {
     </aside>`;
 }
 
+// Two altitudes of the same map. Modules answer "what is this system",
+// components answer "how does a request move through it".
+const VIEWS = DATA.views || { modules: { nodes: DATA.nodes, edges: DATA.edges } };
+const HAS_COMPONENTS = !!(VIEWS.components && VIEWS.components.nodes.length
+                          && VIEWS.components.nodes.length !== VIEWS.modules.nodes.length);
+
 function App() {
   const nodeTypes = useMemo(() => ({ arch: ArchNode }), []);
   const [selectedId, setSelectedId] = useState(null);
+  const [view, setView] = useState("modules");
+
+  const active = VIEWS[view] || VIEWS.modules;
 
   const rfNodes = useMemo(() => {
-    const laid = layout(DATA.nodes, DATA.edges, DIRECTION);
+    const laid = layout(active.nodes, active.edges, DIRECTION);
     return laid.map((n) => ({
       id: n.id, type: "arch", position: n.position, data: n,
     }));
-  }, []);
+  }, [view]);
 
   const rfEdges = useMemo(() =>
-    DATA.edges.map((e) => ({
+    active.edges.map((e) => ({
       ...e, animated: false,
       markerEnd: { type: "arrowclosed" },
       style: { stroke: "#94a3b8", strokeWidth: 1.5 },
-    })), []);
+    })), [view]);
+
+  const switchView = useCallback((next) => {
+    setView(next);
+    setSelectedId(null);            // ids differ between views
+  }, []);
 
   const selectedNode = rfNodes.find((n) => n.id === selectedId) || null;
   const onNodeClick = useCallback((_e, node) => setSelectedId(node.id), []);
@@ -291,6 +396,15 @@ function App() {
     <div class="flow-wrap">
       <header>
         <h1>${DATA.title}</h1>
+        ${HAS_COMPONENTS && html`
+          <div class="viewtabs">
+            <button
+              class=${view === "modules" ? "active" : ""}
+              onClick=${() => switchView("modules")}>Modules</button>
+            <button
+              class=${view === "components" ? "active" : ""}
+              onClick=${() => switchView("components")}>Components</button>
+          </div>`}
         <div class="legend">
           <span><span class="dot" style=${{ borderColor: KIND_COLOR.frontend }}></span>frontend</span>
           <span><span class="dot" style=${{ borderColor: KIND_COLOR.backend }}></span>backend</span>
@@ -339,7 +453,8 @@ def head_sha() -> str:
 
 
 def render_html(graph: dict, title: str, direction: str) -> str:
-    payload = {"title": title, "nodes": graph["nodes"], "edges": graph["edges"]}
+    payload = {"title": title, "nodes": graph["nodes"], "edges": graph["edges"],
+               "views": graph.get("views", {})}
     data_json = json.dumps(payload, ensure_ascii=False)
     # Guard against the data accidentally closing the inline <script>.
     data_json = data_json.replace("</", "<\\/")
