@@ -117,7 +117,20 @@ Do not ask for confirmation and do not ask the user to approve module boundaries
 - Components are logical sub-groupings within a module (2-6 per module)
 - Group by shared responsibility, not by individual files
 - Only go deeper (nested components) when a component is genuinely complex
-- Small modules (< 5 files) may not need components at all
+- **Split on distinct responsibilities, not on size.** A module is one component only
+  when it genuinely does one thing. Four small files that each wrap a different third
+  party are four components; twelve files that together implement one concern are one.
+  Do not skip components because a module looks small.
+- A module whose callers would otherwise all point at the same node needs splitting —
+  `Payments -> Third-Party Integrations` says far less than `Payments -> Payment Client`
+- Name a component for what it *is*, never for the external it talks to. The client that
+  calls Stripe is `Payment Client`; `Stripe` is the external service it depends on
+- Give every component a `path`. Usually a directory, but a single file is fine when one
+  file is one responsibility — `integrations/stripe_client.py` is a legitimate component path
+- **Record `depends_on` for every component**, the same way you do for modules. This is
+  not optional detail — a module whose components have no edges is a list of boxes, and
+  the diagram cannot show how a request actually moves through the system. Trace these
+  in Step 6 along with the module-level ones.
 
 ### Step 4: Identify external dependencies
 - External = services this system communicates with OVER THE NETWORK
@@ -137,11 +150,32 @@ Do not ask for confirmation and do not ask the user to approve module boundaries
 - Map which architecture modules are hosted in which deployment resources using `hosts`
 
 ### Step 6: Trace dependencies
-- `depends_on` means "this module/component needs the other to function"
+
+Trace at **both levels**. Module edges say how the system is arranged; component edges
+say how work actually flows through it, and only the second is fine-grained enough to
+follow a single request.
+
+- `depends_on` means "this needs the other to function"
 - Trace from actual imports, API calls, database connections in the code — **never from what docs claim**
 - If a README says Module A depends on Module B but there are no imports between them, do not include that dependency
 - External services are dependencies too
 - Avoid circular dependencies at the module level
+
+**How to reference something in `depends_on`:**
+
+| Target | Write |
+|--------|-------|
+| Another module | `Data Access Layer` |
+| An external service | `Stripe` |
+| A component in the same module | `Catalogue` |
+| A component in a different module | `Business Services > Catalogue` |
+
+Qualify with `Module Name > Component Name` whenever you cross a module boundary. A bare
+name is only for a sibling inside the same module — unqualified cross-module references
+are ambiguous and will not resolve.
+
+A module's `depends_on` should be the union of what its components reach, minus anything
+inside itself. If a component depends on something, its parent module does too.
 
 ### Step 7: Write the map
 - Create `.unkode/` in the project root if it doesn't exist
@@ -200,8 +234,8 @@ Read the changed files themselves. Do not infer from filenames.
 ### Step 4: Update the map
 - **New directory no module claims** → add a module, or a component if it belongs inside one
 - **Module path now empty** → remove that module and every `depends_on` referencing it
-- **New cross-module import** → add to `depends_on`
-- **Import removed, and no other file in the module uses it** → remove from `depends_on`
+- **New import crossing a module or component boundary** → add to `depends_on` at both levels
+- **Import removed, and nothing else in that component or module uses it** → remove from `depends_on`
 - **New SDK, client or connection string** → add an external if it is not already listed
 - **Files moved** → update `path`
 - **Logic changed inside existing files, no boundary crossed** → change nothing but `_meta`
@@ -248,6 +282,7 @@ architecture:
       - name: Component Name
         path: relative/path/subdir
         description: One sentence explaining what this component does.
+        depends_on: [Sibling Component, Other Module > Their Component, External Service]
 
   - name: External Service Name
     type: external
@@ -266,10 +301,11 @@ deployment:
 
 1. Names must be functional and understandable by a CTO who doesn't read code.
 2. External modules are ONLY network services/APIs — never libraries or frameworks.
-3. `depends_on` references exact `name` strings from other entries.
-4. `path` is a directory prefix, not individual files.
-5. `deployment` section is omitted if no infrastructure-as-code is found.
-6. `tech` lists primary language and framework, not every dependency.
-7. Every source directory should belong to exactly one module. No overlaps.
-8. Keep roles and descriptions to one sentence.
-9. Do NOT include test directories, build output, or generated files as modules.
+3. `depends_on` references exact `name` strings, qualified as `Module > Component` when crossing a module boundary.
+4. Components carry `path` and `depends_on` just as modules do; a component without edges is incomplete.
+5. A module's `path` is a directory prefix. A component's `path` may be a directory or a single file.
+6. `deployment` section is omitted if no infrastructure-as-code is found.
+7. `tech` lists primary language and framework, not every dependency.
+8. Every source directory should belong to exactly one module. No overlaps.
+9. Keep roles and descriptions to one sentence.
+10. Do NOT include test directories, build output, or generated files as modules.
