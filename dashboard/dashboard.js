@@ -101,6 +101,123 @@ function buildNodes(arch, diffByName) {
   });
 }
 
+// Components are addressed as "Module > Component" when a dependency crosses a
+// module boundary, and by bare name inside their own module.
+const QUALIFIER = ' > ';
+
+function componentKey(moduleName, componentName) {
+  return moduleName + QUALIFIER + componentName;
+}
+
+function indexComponents(arch) {
+  const byKey = new Map();          // "Module > Component" -> { mod, comp }
+  arch.forEach((mod) => {
+    (mod.components || []).forEach((comp) => {
+      if (comp && comp.name) byKey.set(componentKey(mod.name, comp.name), { mod, comp });
+    });
+  });
+  return byKey;
+}
+
+// Resolve a depends_on entry to the node id that represents it, seen from
+// `within`. Returns null when it names nothing in the map.
+function resolveRef(dep, within, componentIndex, moduleNames) {
+  if (dep.includes(QUALIFIER)) {
+    return componentIndex.has(dep) ? dep : null;
+  }
+  const sibling = componentKey(within, dep);
+  if (componentIndex.has(sibling)) return sibling;
+  return moduleNames.has(dep) ? dep : null;
+}
+
+// The same map one level down: every module that has components expands into
+// them, so an edge lands on the component that owns the dependency. Modules
+// without components stay whole, so edges into them still have a target.
+function buildComponentGraph(arch, diffByName) {
+  const moduleNames = new Set(arch.map((m) => m.name));
+  const componentIndex = indexComponents(arch);
+  const nodes = [];
+
+  arch.forEach((mod) => {
+    const comps = mod.components || [];
+    if (!comps.length) {
+      const diff = diffByName ? diffByName[mod.name] : null;
+      nodes.push({
+        id: mod.name,
+        type: 'archNode',
+        position: { x: 0, y: 0 },
+        data: {
+          label: mod.name,
+          tech: mod.tech || [],
+          role: mod.role || '',
+          kind: mod.kind || (mod.type === 'external' ? 'other' : 'backend'),
+          isExternal: mod.type === 'external',
+          components: [],
+          depends_on: mod.depends_on || [],
+          raw: mod,
+          status: diff ? diff.status : 'unchanged',
+          changes: diff ? diff.changes : [],
+        },
+      });
+      return;
+    }
+    comps.forEach((comp) => {
+      if (!comp || !comp.name) return;
+      nodes.push({
+        id: componentKey(mod.name, comp.name),
+        type: 'archNode',
+        position: { x: 0, y: 0 },
+        data: {
+          label: comp.name,
+          parent: mod.name,
+          tech: [],
+          role: comp.description || '',
+          kind: mod.kind || 'backend',
+          isExternal: false,
+          components: [],
+          depends_on: comp.depends_on || [],
+          raw: comp,
+          // A component inherits its module's diff status: the map has no
+          // component-level diff yet, so this is the honest approximation.
+          status: 'unchanged',
+          changes: [],
+        },
+      });
+    });
+  });
+
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const edges = [];
+  const seen = new Set();
+
+  function addEdge(source, dep, within) {
+    const target = resolveRef(dep, within, componentIndex, moduleNames);
+    if (!target || !nodeIds.has(target) || target === source) return;
+    const key = source + '__' + target;
+    if (seen.has(key)) return;
+    seen.add(key);
+    edges.push({
+      id: key, source, target, type: 'smoothstep',
+      data: { status: 'unchanged' },
+    });
+  }
+
+  arch.forEach((mod) => {
+    const comps = mod.components || [];
+    if (comps.length) {
+      comps.forEach((comp) => {
+        if (!comp || !comp.name) return;
+        const src = componentKey(mod.name, comp.name);
+        (comp.depends_on || []).forEach((dep) => addEdge(src, dep, mod.name));
+      });
+    } else {
+      (mod.depends_on || []).forEach((dep) => addEdge(mod.name, dep, mod.name));
+    }
+  });
+
+  return { nodes, edges };
+}
+
 function buildEdges(arch, nodeIds) {
   const edges = [];
   arch.forEach((mod) => {
@@ -208,6 +325,7 @@ function ArchNode({ data, selected }) {
       <${Handle} type="target" position=${Position.Left} style=${{ opacity: 0 }} />
       <div class="archNodeIcon">${icon}</div>
       <div class="archNodeBody">
+        ${data.parent ? html`<div class="archNodeParent">${data.parent}</div>` : null}
         <div class="archNodeName">${data.label}</div>
         ${tech ? html`<div class="archNodeTech">${tech}</div>` : null}
       </div>
@@ -319,6 +437,7 @@ function edgeStyleByStatus(status) {
 
 function App() {
   const [tab, setTab] = useState(PR ? 'changes' : 'architecture');
+  const [archView, setArchView] = useState('modules');
   const [latest, setLatest] = useState(null);
   const [prev, setPrev] = useState(null);
   const [status, setStatus] = useState('loading');
@@ -409,13 +528,24 @@ function App() {
     }
   });
 
-  const archData = useMemo(() => {
+  const archViews = useMemo(() => {
     if (!latest) return null;
     const arch = latest.architecture || [];
     const nodes = buildNodes(arch, null);
     const nodeIds = new Set(nodes.map((n) => n.id));
-    return layout(nodes, buildEdges(arch, nodeIds));
+    const modules = layout(nodes, buildEdges(arch, nodeIds));
+    const comp = buildComponentGraph(arch, null);
+    // Only worth offering when it actually differs from the module view.
+    const components = comp.nodes.length && comp.nodes.length !== nodes.length
+      ? layout(comp.nodes, comp.edges)
+      : null;
+    return { modules, components };
   }, [latest]);
+
+  const hasComponentView = !!(archViews && archViews.components);
+  const archData = archViews
+    ? (archView === 'components' && archViews.components ? archViews.components : archViews.modules)
+    : null;
 
   const diffData = useMemo(() => {
     if (!latest || !prev) return null;
@@ -573,6 +703,16 @@ function App() {
   }
 
   return html`
+    <div class="flowHost">
+      ${tab === 'architecture' && hasComponentView ? html`
+        <div class="archViewToggle">
+          <button
+            class=${archView === 'modules' ? 'active' : ''}
+            onClick=${() => { setArchView('modules'); setSelectedId(null); }}>Modules</button>
+          <button
+            class=${archView === 'components' ? 'active' : ''}
+            onClick=${() => { setArchView('components'); setSelectedId(null); }}>Components</button>
+        </div>` : null}
     <${ReactFlow}
       nodes=${displayNodes}
       edges=${displayEdges}
@@ -592,6 +732,7 @@ function App() {
       <${Controls} showInteractive=${false} />
       <${MiniMap} pannable zoomable style=${{ background: '#0f1623', border: '1px solid #1e2838' }} nodeColor=${() => '#00ad00'} />
     <//>
+    </div>
   `;
 }
 
